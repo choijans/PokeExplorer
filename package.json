@@ -10,10 +10,28 @@
     "test": "jest"
   },
   "dependencies": {
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "@react-native-firebase/app": "^23.5.0",
+    "@react-native-firebase/auth": "^23.5.0",
+    "@react-native-firebase/database": "^23.5.0",
+    "@react-native-firebase/messaging": "^23.5.0",
+    "@react-native/new-app-screen": "0.82.1",
+    "@react-navigation/native": "^7.1.19",
+    "@react-navigation/native-stack": "^7.6.2",
+    "axios": "^1.13.2",
     "react": "19.1.1",
     "react-native": "0.82.1",
-    "@react-native/new-app-screen": "0.82.1",
-    "react-native-safe-area-context": "^5.5.2"
+    "react-native-geolocation-service": "^5.3.1",
+    "react-native-gesture-handler": "^2.29.1",
+    "react-native-maps": "^1.26.18",
+    "react-native-permissions": "^5.4.4",
+    "react-native-push-notification": "^8.1.1",
+    "react-native-reanimated": "^4.1.5",
+    "react-native-safe-area-context": "^5.5.2",
+    "react-native-sensors": "^7.3.6",
+    "react-native-share": "^12.2.1",
+    "react-native-vision-camera": "^4.7.3",
+    "react-native-voice": "^0.3.0"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
