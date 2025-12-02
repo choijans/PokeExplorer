@@ -1,9 +1,9 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import auth, { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut as firebaseSignOut, GoogleAuthProvider, signInWithCredential } from '@react-native-firebase/auth';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 
 interface AuthContextType {
-  user: FirebaseAuthTypes.User | null;
+  user: any;
   loading: boolean;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string) => Promise<void>;
@@ -22,7 +22,7 @@ export const useAuth = () => {
 };
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<FirebaseAuthTypes.User | null>(null);
+  const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -32,7 +32,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       iosClientId: '998672412190-f115m5nef93fdjtfek6iq2v36pc75083.apps.googleusercontent.com', // iOS client ID from plist
     });
 
-    const subscriber = auth().onAuthStateChanged((user) => {
+    const auth = getAuth();
+    const subscriber = onAuthStateChanged(auth, (user) => {
       setUser(user);
       setLoading(false);
     });
@@ -41,23 +42,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signInWithEmail = async (email: string, password: string) => {
-    await auth().signInWithEmailAndPassword(email, password);
+    const auth = getAuth();
+    await signInWithEmailAndPassword(auth, email, password);
   };
 
   const signUpWithEmail = async (email: string, password: string) => {
-    await auth().createUserWithEmailAndPassword(email, password);
+    const auth = getAuth();
+    await createUserWithEmailAndPassword(auth, email, password);
   };
 
   const signInWithGoogle = async () => {
     await GoogleSignin.hasPlayServices();
     await GoogleSignin.signIn();
     const { idToken } = await GoogleSignin.getTokens();
-    const googleCredential = auth.GoogleAuthProvider.credential(idToken);
-    await auth().signInWithCredential(googleCredential);
+    const googleCredential = GoogleAuthProvider.credential(idToken);
+    const auth = getAuth();
+    await signInWithCredential(auth, googleCredential);
   };
 
   const signOut = async () => {
-    await auth().signOut();
+    const auth = getAuth();
+    await firebaseSignOut(auth);
     await GoogleSignin.signOut();
   };
 

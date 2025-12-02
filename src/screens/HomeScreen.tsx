@@ -1,9 +1,13 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigation/AppNavigator';
+
+type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
 
 const HomeScreen: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<HomeScreenNavigationProp>();
 
   return (
     <View style={styles.container}>
@@ -11,7 +15,7 @@ const HomeScreen: React.FC = () => {
       <Text style={styles.subtitle}>Discover and catalog Pokémon in the real world.</Text>
       <TouchableOpacity
         style={styles.button}
-        onPress={() => navigation.navigate('Profile' as never)}
+        onPress={() => navigation.navigate('Profile')}
       >
         <Text style={styles.buttonText}>View Profile</Text>
       </TouchableOpacity>
