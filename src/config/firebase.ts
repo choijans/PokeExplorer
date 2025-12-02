@@ -1,6 +1,2 @@
-import { initializeApp } from '@react-native-firebase/app';
-
-// Firebase config is handled by google-services.json and GoogleService-Info.plist
-const app = initializeApp({} as any);
-
-export default app;
+// Firebase is auto-initialized by google-services.json (Android) and GoogleService-Info.plist (iOS)
+// No manual initialization needed

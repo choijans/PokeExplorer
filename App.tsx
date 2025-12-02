@@ -10,7 +10,7 @@ import { StatusBar } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/contexts/AuthContext';
 import AppNavigator from './src/navigation/AppNavigator';
-import './src/config/firebase'; // Initialize Firebase
+// Firebase is auto-initialized by native config files
 
 function App() {
   return (
