@@ -2,12 +2,10 @@ import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../contexts/AuthContext';
 import LoginScreen from '../screens/LoginScreen';
-import UserProfileScreen from '../screens/UserProfileScreen';
-import HomeScreen from '../screens/HomeScreen'; // Placeholder for main app screen
+import BottomTabNavigator from './BottomTabNavigator';
 
 export type RootStackParamList = {
-  Home: undefined;
-  Profile: undefined;
+  Main: undefined;
   Login: undefined;
 };
 
@@ -17,16 +15,13 @@ const AppNavigator: React.FC = () => {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return null; // Or a loading screen
+    return null;
   }
 
   return (
     <Stack.Navigator>
       {user ? (
-        <>
-          <Stack.Screen name="Home" component={HomeScreen} />
-          <Stack.Screen name="Profile" component={UserProfileScreen} />
-        </>
+        <Stack.Screen name="Main" component={BottomTabNavigator} options={{ headerShown: false }} />
       ) : (
         <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
       )}

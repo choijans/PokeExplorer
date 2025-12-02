@@ -14,7 +14,7 @@ const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { signInWithEmail, signUpWithEmail, signInWithGoogle } = useAuth();
+  const { signInWithEmail, signUpWithEmail } = useAuth();
 
   const handleEmailLogin = async () => {
     if (!email || !password) {
@@ -46,17 +46,6 @@ const LoginScreen: React.FC = () => {
     }
   };
 
-  const handleGoogleSignIn = async () => {
-    setLoading(true);
-    try {
-      await signInWithGoogle();
-    } catch (error: any) {
-      Alert.alert('Google Sign In Failed', error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   return (
     <View style={styles.container}>
       <Text style={styles.title}>PokeExplorer</Text>
@@ -80,9 +69,6 @@ const LoginScreen: React.FC = () => {
       </TouchableOpacity>
       <TouchableOpacity style={styles.button} onPress={handleEmailSignUp} disabled={loading}>
         {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Sign Up</Text>}
-      </TouchableOpacity>
-      <TouchableOpacity style={[styles.button, styles.googleButton]} onPress={handleGoogleSignIn} disabled={loading}>
-        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Sign In with Google</Text>}
       </TouchableOpacity>
     </View>
   );
@@ -117,9 +103,6 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     marginBottom: 10,
-  },
-  googleButton: {
-    backgroundColor: '#db4437',
   },
   buttonText: {
     color: '#fff',

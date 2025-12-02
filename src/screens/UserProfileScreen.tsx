@@ -21,8 +21,10 @@ const UserProfileScreen: React.FC = () => {
   const [discoveredPokemon, setDiscoveredPokemon] = useState<Pokemon[]>([]);
 
   useEffect(() => {
-    loadDiscoveredPokemon();
-  }, []);
+    if (user) {
+      loadDiscoveredPokemon();
+    }
+  }, [user]);
 
   const loadDiscoveredPokemon = async () => {
     try {

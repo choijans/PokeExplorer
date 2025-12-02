@@ -1,13 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut as firebaseSignOut, GoogleAuthProvider, signInWithCredential } from '@react-native-firebase/auth';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import auth from '@react-native-firebase/auth';
 
 interface AuthContextType {
   user: any;
   loading: boolean;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string) => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -26,14 +24,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Configure Google Sign-In
-    GoogleSignin.configure({
-      webClientId: '998672412190-ka79g4qabmenl089jqcje4ameqcba7r2.apps.googleusercontent.com', // Android client ID
-      iosClientId: '998672412190-f115m5nef93fdjtfek6iq2v36pc75083.apps.googleusercontent.com', // iOS client ID from plist
-    });
-
-    const auth = getAuth();
-    const subscriber = onAuthStateChanged(auth, (user) => {
+    const subscriber = auth().onAuthStateChanged((user) => {
       setUser(user);
       setLoading(false);
     });
@@ -42,28 +33,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signInWithEmail = async (email: string, password: string) => {
-    const auth = getAuth();
-    await signInWithEmailAndPassword(auth, email, password);
+    await auth().signInWithEmailAndPassword(email, password);
   };
 
   const signUpWithEmail = async (email: string, password: string) => {
-    const auth = getAuth();
-    await createUserWithEmailAndPassword(auth, email, password);
-  };
-
-  const signInWithGoogle = async () => {
-    await GoogleSignin.hasPlayServices();
-    await GoogleSignin.signIn();
-    const { idToken } = await GoogleSignin.getTokens();
-    const googleCredential = GoogleAuthProvider.credential(idToken);
-    const auth = getAuth();
-    await signInWithCredential(auth, googleCredential);
+    await auth().createUserWithEmailAndPassword(email, password);
   };
 
   const signOut = async () => {
-    const auth = getAuth();
-    await firebaseSignOut(auth);
-    await GoogleSignin.signOut();
+    await auth().signOut();
   };
 
   const value = {
@@ -71,7 +49,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loading,
     signInWithEmail,
     signUpWithEmail,
-    signInWithGoogle,
     signOut,
   };
 
