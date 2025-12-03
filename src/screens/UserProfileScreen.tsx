@@ -8,17 +8,13 @@ import {
   Alert,
 } from 'react-native';
 import { useAuth } from '../contexts/AuthContext';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { discoveryService } from '../services/discoveryService';
 
-interface Pokemon {
-  id: number;
-  name: string;
-  discoveredAt: string;
-}
+
 
 const UserProfileScreen: React.FC = () => {
   const { user, signOut } = useAuth();
-  const [discoveredPokemon, setDiscoveredPokemon] = useState<Pokemon[]>([]);
+  const [discoveryCount, setDiscoveryCount] = useState(0);
 
   useEffect(() => {
     if (user) {
@@ -28,12 +24,10 @@ const UserProfileScreen: React.FC = () => {
 
   const loadDiscoveredPokemon = async () => {
     try {
-      const stored = await AsyncStorage.getItem('discoveredPokemon');
-      if (stored) {
-        setDiscoveredPokemon(JSON.parse(stored));
-      }
+      const count = await discoveryService.getDiscoveryCount();
+      setDiscoveryCount(count);
     } catch (error) {
-      console.error('Error loading discovered Pokémon:', error);
+      console.error('Error loading discovery count:', error);
     }
   };
 
@@ -57,24 +51,18 @@ const UserProfileScreen: React.FC = () => {
     );
   };
 
-  const renderPokemon = ({ item }: { item: Pokemon }) => (
-    <View style={styles.pokemonItem}>
-      <Text style={styles.pokemonName}>{item.name}</Text>
-      <Text style={styles.discoveredAt}>Discovered: {new Date(item.discoveredAt).toLocaleDateString()}</Text>
-    </View>
-  );
+
 
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Profile</Text>
       <Text style={styles.email}>Email: {user?.email}</Text>
-      <Text style={styles.sectionTitle}>Discovered Pokémon ({discoveredPokemon.length})</Text>
-      <FlatList
-        data={discoveredPokemon}
-        renderItem={renderPokemon}
-        keyExtractor={(item) => item.id.toString()}
-        style={styles.list}
-      />
+      <View style={styles.statsContainer}>
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>{discoveryCount}</Text>
+          <Text style={styles.statLabel}>Pokemon Discovered</Text>
+        </View>
+      </View>
       <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
         <Text style={styles.signOutText}>Sign Out</Text>
       </TouchableOpacity>
@@ -106,29 +94,29 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     color: '#333',
   },
-  list: {
-    flex: 1,
-  },
-  pokemonItem: {
+  statsContainer: {
     backgroundColor: '#fff',
-    padding: 15,
-    marginBottom: 10,
-    borderRadius: 8,
+    borderRadius: 12,
+    padding: 20,
+    marginBottom: 20,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    elevation: 2,
+    elevation: 3,
   },
-  pokemonName: {
-    fontSize: 18,
+  statItem: {
+    alignItems: 'center',
+  },
+  statNumber: {
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#FF0000',
   },
-  discoveredAt: {
-    fontSize: 14,
+  statLabel: {
+    fontSize: 16,
     color: '#666',
-    marginTop: 5,
+    marginTop: 4,
   },
   signOutButton: {
     backgroundColor: '#dc3545',

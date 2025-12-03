@@ -12,6 +12,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import PokemonCard from './PokemonCard';
 import { Pokemon, pokeApi } from '../services/pokeApi';
+import { discoveryService } from '../services/discoveryService';
 
 const PokedexList: React.FC = () => {
   const navigation = useNavigation();
@@ -19,10 +20,17 @@ const PokedexList: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Pokemon[]>([]);
   const [loading, setLoading] = useState(false);
+  const [discoveredIds, setDiscoveredIds] = useState<Set<number>>(new Set());
 
   useEffect(() => {
     loadInitialPokemon();
+    loadDiscoveredPokemon();
   }, []);
+
+  const loadDiscoveredPokemon = async () => {
+    const discovered = await discoveryService.getDiscoveredPokemon();
+    setDiscoveredIds(new Set(discovered.map(p => p.id)));
+  };
 
   const loadInitialPokemon = async () => {
     console.log('Loading initial Pokemon...');
@@ -37,10 +45,14 @@ const PokedexList: React.FC = () => {
     }
 
     try {
+      console.log('Fetching Pokemon list...');
+      const list = await pokeApi.getPokemonList(20, 0);
+      console.log(`Fetched ${list.length} Pokemon from list`);
       const pokemonList: Pokemon[] = [];
-      for (let i = 1; i <= 20; i++) {
-        console.log(`Fetching Pokemon ${i}...`);
-        const poke = await pokeApi.getPokemon(i);
+      for (const item of list) {
+        const id = parseInt(item.url.split('/')[6]);
+        console.log(`Fetching Pokemon ${id}...`);
+        const poke = await pokeApi.getPokemon(id);
         pokemonList.push(poke);
       }
       console.log(`Loaded ${pokemonList.length} Pokemon`);
@@ -82,7 +94,11 @@ const PokedexList: React.FC = () => {
   };
 
   const renderPokemonItem = ({ item }: { item: Pokemon }) => (
-    <PokemonCard pokemon={item} onPress={() => handlePokemonPress(item)} />
+    <PokemonCard 
+      pokemon={item} 
+      onPress={() => handlePokemonPress(item)}
+      isDiscovered={discoveredIds.has(item.id)}
+    />
   );
 
   const displayData = searchResults.length > 0 ? searchResults : pokemon;

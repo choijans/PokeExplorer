@@ -65,7 +65,12 @@ class PokeAPI {
   async testConnection(): Promise<boolean> {
     try {
       console.log('Testing connection with fetch');
-      const response = await fetch('https://pokeapi.co/api/v2/pokemon/1');
+      const response = await fetch('http://pokeapi.co/api/v2/pokemon', {
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'PokeExplorer/1.0',
+        },
+      });
       console.log('Response received:', response.status);
       return response.ok;
     } catch (error) {
@@ -96,13 +101,19 @@ class PokeAPI {
       console.log('Cache read error:', error);
     }
 
+
     // Fetch from API with retry mechanism
     let lastError;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         console.log(`Fetching Pokemon ${id} from API (attempt ${attempt})...`);
 
-        const response = await fetch(`${BASE_URL}/pokemon/${id}`);
+        const response = await fetch(`${BASE_URL}/pokemon/${id}`, {
+          headers: {
+            'Accept': 'application/json',
+            'User-Agent': 'PokeExplorer/1.0',
+          },
+        });
         if (!response.ok) {
           throw new Error(`HTTP ${response.status}`);
         }
@@ -181,7 +192,12 @@ class PokeAPI {
     }
 
     try {
-      const response = await fetch(`${BASE_URL}/pokemon/${name}`);
+      const response = await fetch(`${BASE_URL}/pokemon/${name}`, {
+        headers: {
+          'Accept': 'application/json',
+          'User-Agent': 'PokeExplorer/1.0',
+        },
+      });
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`);
       }
@@ -194,6 +210,20 @@ class PokeAPI {
     } catch (error) {
       throw new Error(`Pokemon ${name} not found`);
     }
+  }
+
+  async getPokemonList(limit: number = 20, offset: number = 0): Promise<{ name: string; url: string }[]> {
+    const response = await fetch(`${BASE_URL}/pokemon?limit=${limit}&offset=${offset}`, {
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'PokeExplorer/1.0',
+      },
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+    const data = await response.json();
+    return data.results;
   }
 
   async getRandomPokemon(): Promise<Pokemon> {

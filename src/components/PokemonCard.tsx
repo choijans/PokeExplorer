@@ -5,9 +5,10 @@ import { Pokemon } from '../services/pokeApi';
 interface PokemonCardProps {
   pokemon: Pokemon;
   onPress: () => void;
+  isDiscovered?: boolean;
 }
 
-const PokemonCard: React.FC<PokemonCardProps> = ({ pokemon, onPress }) => {
+const PokemonCard: React.FC<PokemonCardProps> = ({ pokemon, onPress, isDiscovered = false }) => {
   const getTypeColor = (type: string) => {
     const colors: { [key: string]: string } = {
       normal: '#A8A878',
@@ -33,7 +34,12 @@ const PokemonCard: React.FC<PokemonCardProps> = ({ pokemon, onPress }) => {
   };
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress}>
+    <TouchableOpacity style={[styles.card, isDiscovered && styles.discoveredCard]} onPress={onPress}>
+      {isDiscovered && (
+        <View style={styles.discoveredBadge}>
+          <Text style={styles.discoveredText}>✓</Text>
+        </View>
+      )}
       <Image
         source={{ uri: pokemon.sprites.other?.['official-artwork']?.front_default || pokemon.sprites.front_default }}
         style={styles.image}
@@ -102,6 +108,26 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   typeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  discoveredCard: {
+    borderWidth: 2,
+    borderColor: '#4CAF50',
+  },
+  discoveredBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#4CAF50',
+    borderRadius: 12,
+    width: 24,
+    height: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  discoveredText: {
     color: '#fff',
     fontSize: 12,
     fontWeight: 'bold',
