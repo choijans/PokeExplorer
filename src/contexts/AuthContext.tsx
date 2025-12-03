@@ -1,13 +1,11 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut as firebaseSignOut, GoogleAuthProvider, signInWithCredential } from '@react-native-firebase/auth';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, signOut as firebaseSignOut } from '@react-native-firebase/auth';
 
 interface AuthContextType {
   user: any;
   loading: boolean;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string) => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -26,12 +24,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Configure Google Sign-In
-    GoogleSignin.configure({
-      webClientId: '998672412190-ka79g4qabmenl089jqcje4ameqcba7r2.apps.googleusercontent.com', // Android client ID
-      iosClientId: '998672412190-f115m5nef93fdjtfek6iq2v36pc75083.apps.googleusercontent.com', // iOS client ID from plist
-    });
-
     const auth = getAuth();
     const subscriber = onAuthStateChanged(auth, (user) => {
       setUser(user);
@@ -42,28 +34,43 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signInWithEmail = async (email: string, password: string) => {
-    const auth = getAuth();
-    await signInWithEmailAndPassword(auth, email, password);
+    try {
+      const auth = getAuth();
+      await signInWithEmailAndPassword(auth, email, password);
+    } catch (error) {
+      console.error('Error in signInWithEmail:', error);
+      if (error && (error as any).code) {
+        console.error('Error code:', (error as any).code);
+      }
+      throw error;
+    }
   };
 
   const signUpWithEmail = async (email: string, password: string) => {
-    const auth = getAuth();
-    await createUserWithEmailAndPassword(auth, email, password);
+    try {
+      const auth = getAuth();
+      await createUserWithEmailAndPassword(auth, email, password);
+    } catch (error) {
+      console.error('Error in signUpWithEmail:', error);
+      if (error && (error as any).code) {
+        console.error('Error code:', (error as any).code);
+      }
+      throw error;
+    }
   };
 
-  const signInWithGoogle = async () => {
-    await GoogleSignin.hasPlayServices();
-    await GoogleSignin.signIn();
-    const { idToken } = await GoogleSignin.getTokens();
-    const googleCredential = GoogleAuthProvider.credential(idToken);
-    const auth = getAuth();
-    await signInWithCredential(auth, googleCredential);
-  };
 
   const signOut = async () => {
-    const auth = getAuth();
-    await firebaseSignOut(auth);
-    await GoogleSignin.signOut();
+    try {
+      const auth = getAuth();
+      await firebaseSignOut(auth);
+    } catch (error) {
+      console.error('Error in signOut:', error);
+      if (error && (error as any).code) {
+        console.error('Error code:', (error as any).code);
+      }
+      throw error;
+    }
   };
 
   const value = {
@@ -71,7 +78,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     loading,
     signInWithEmail,
     signUpWithEmail,
-    signInWithGoogle,
     signOut,
   };
 

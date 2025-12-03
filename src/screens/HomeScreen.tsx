@@ -15,9 +15,9 @@ const HomeScreen: React.FC = () => {
       <Text style={styles.subtitle}>Discover and catalog Pokémon in the real world.</Text>
       <TouchableOpacity
         style={styles.button}
-        onPress={() => navigation.navigate('Profile')}
+        onPress={() => navigation.navigate('PokemonList')}
       >
-        <Text style={styles.buttonText}>View Profile</Text>
+        <Text style={styles.buttonText}>Explore Pokémon</Text>
       </TouchableOpacity>
     </View>
   );

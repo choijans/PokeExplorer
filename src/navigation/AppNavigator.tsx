@@ -4,12 +4,14 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../contexts/AuthContext';
 import LoginScreen from '../screens/LoginScreen';
 import UserProfileScreen from '../screens/UserProfileScreen';
-import HomeScreen from '../screens/HomeScreen'; // Placeholder for main app screen
+import HomeScreen from '../screens/HomeScreen';
+import PokemonListScreen from '../screens/PokemonListScreen';
 
 export type RootStackParamList = {
   Home: undefined;
   Profile: undefined;
   Login: undefined;
+  PokemonList: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -28,6 +30,7 @@ const AppNavigator: React.FC = () => {
           <>
             <Stack.Screen name="Home" component={HomeScreen} />
             <Stack.Screen name="Profile" component={UserProfileScreen} />
+            <Stack.Screen name="PokemonList" component={PokemonListScreen} />
           </>
         ) : (
           <Stack.Screen name="Login" component={LoginScreen} options={{ headerShown: false }} />
