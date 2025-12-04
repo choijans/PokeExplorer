@@ -151,6 +151,9 @@ const HuntScreen: React.FC = () => {
 
   if (!location) return null;
 
+  // Import MapScreen component
+  const MapScreen = require('./MapScreen').default;
+
   const mapHtml = `
     <!DOCTYPE html>
     <html>
@@ -255,14 +258,7 @@ const HuntScreen: React.FC = () => {
       </View>
       
       {showMap ? (
-        <WebView
-          source={{ html: mapHtml }}
-          style={styles.webview}
-          onMessage={(event) => {
-            const index = parseInt(event.nativeEvent.data);
-            handleEncounterPress(encounters[index]);
-          }}
-        />
+        <MapScreen />
       ) : (
         <ScrollView style={styles.listContainer}>
           <Text style={styles.locationText}>

@@ -60,7 +60,7 @@ class LocationService {
         callback(location);
       },
       (error) => console.error('Location watch error:', error),
-      { enableHighAccuracy: false, distanceFilter: 10, timeout: 30000 }
+      { enableHighAccuracy: true, distanceFilter: 5, interval: 1000, fastestInterval: 500 }
     );
     
     return { remove: () => Geolocation.clearWatch(watchId) };
