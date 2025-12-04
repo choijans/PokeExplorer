@@ -1,4 +1,4 @@
-import Geolocation from 'react-native-geolocation-service';
+
 import { PermissionsAndroid, Platform, Alert } from 'react-native';
 import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
 
@@ -19,47 +19,17 @@ class LocationService {
   private currentLocation: Location | null = null;
 
   async requestLocationPermission(): Promise<boolean> {
-    try {
-      if (Platform.OS === 'ios') {
-        const result = await request(PERMISSIONS.IOS.LOCATION_WHEN_IN_USE);
-        return result === RESULTS.GRANTED;
-      } else {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-          {
-            title: 'Location Permission',
-            message: 'PokeExplorer needs access to your location to find Pokemon nearby.',
-            buttonNeutral: 'Ask Me Later',
-            buttonNegative: 'Cancel',
-            buttonPositive: 'OK',
-          }
-        );
-        return granted === PermissionsAndroid.RESULTS.GRANTED;
-      }
-    } catch (error) {
-      console.error('Permission request error:', error);
-      return false;
-    }
+    return true;
   }
 
   async getCurrentLocation(): Promise<Location> {
-    return new Promise((resolve, reject) => {
-      Geolocation.getCurrentPosition(
-        (position) => {
-          const location = {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-          };
-          this.currentLocation = location;
-          resolve(location);
-        },
-        (error) => {
-          console.error('Location error:', error);
-          reject(error);
-        },
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
-      );
-    });
+    // Mock location for demo
+    const location = {
+      latitude: 37.7749,
+      longitude: -122.4194,
+    };
+    this.currentLocation = location;
+    return location;
   }
 
   getBiomeFromLocation(location: Location): string {

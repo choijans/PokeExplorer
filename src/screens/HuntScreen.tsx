@@ -6,9 +6,8 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  Platform,
+  ScrollView,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
 import { locationService, Location, PokemonEncounter } from '../services/locationService';
 import { pokeApi, Pokemon } from '../services/pokeApi';
 import { discoveryService } from '../services/discoveryService';
@@ -16,30 +15,36 @@ import { discoveryService } from '../services/discoveryService';
 const HuntScreen: React.FC = () => {
   const [location, setLocation] = useState<Location | null>(null);
   const [encounters, setEncounters] = useState<PokemonEncounter[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [pokemonData, setPokemonData] = useState<{ [key: number]: Pokemon }>({});
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    initializeHunt();
+    const init = async () => {
+      try {
+        await initializeHunt();
+      } catch (error) {
+        console.error('Hunt screen initialization failed:', error);
+        Alert.alert('Error', `Failed to initialize: ${error}`);
+      }
+    };
+    init();
   }, []);
 
   const initializeHunt = async () => {
     setLoading(true);
+    setError(null);
     try {
       const hasPermission = await locationService.requestLocationPermission();
       if (!hasPermission) {
-        Alert.alert('Permission Required', 'Location permission is required to hunt Pokemon.');
+        setError('Location permission required');
         setLoading(false);
         return;
       }
 
       const currentLocation = await locationService.getCurrentLocation();
-      setLocation(currentLocation);
-
       const newEncounters = locationService.generatePokemonEncounters(currentLocation);
-      setEncounters(newEncounters);
-
-      // Load Pokemon data for encounters
+      
       const pokemonDataMap: { [key: number]: Pokemon } = {};
       for (const encounter of newEncounters) {
         try {
@@ -49,10 +54,13 @@ const HuntScreen: React.FC = () => {
           console.error(`Failed to load Pokemon ${encounter.id}:`, error);
         }
       }
+      
+      setLocation(currentLocation);
+      setEncounters(newEncounters);
       setPokemonData(pokemonDataMap);
-    } catch (error) {
-      console.error('Hunt initialization error:', error);
-      Alert.alert('Error', 'Failed to initialize hunt mode. Please try again.');
+    } catch (error: any) {
+      console.error('Hunt error:', error);
+      setError(error.message || 'Failed to initialize');
     } finally {
       setLoading(false);
     }
@@ -117,15 +125,19 @@ const HuntScreen: React.FC = () => {
     );
   }
 
-  if (!location) {
+  if (!location && !loading) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>Unable to get your location</Text>
+        <Text style={styles.errorText}>{error || 'Unable to get location'}</Text>
         <TouchableOpacity style={styles.retryButton} onPress={initializeHunt}>
           <Text style={styles.retryButtonText}>Try Again</Text>
         </TouchableOpacity>
       </View>
     );
+  }
+
+  if (!location) {
+    return null;
   }
 
   return (
@@ -136,40 +148,46 @@ const HuntScreen: React.FC = () => {
           <Text style={styles.refreshButtonText}>🔄</Text>
         </TouchableOpacity>
       </View>
-
-      <MapView
-        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-        style={styles.map}
-        initialRegion={{
-          latitude: location.latitude,
-          longitude: location.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        }}
-        showsUserLocation={true}
-        showsMyLocationButton={true}
-      >
+      
+      <ScrollView style={styles.listContainer}>
+        <Text style={styles.locationText}>
+          📍 Your Location: {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}
+        </Text>
+        
         {encounters.map((encounter, index) => {
           const pokemon = pokemonData[encounter.id];
+          const distance = locationService.calculateDistance(location, encounter.location);
+          
           return (
-            <Marker
+            <TouchableOpacity
               key={index}
-              coordinate={encounter.location}
-              title={pokemon?.name || 'Unknown Pokemon'}
-              description={`Biome: ${encounter.biome}`}
+              style={[
+                styles.encounterCard,
+                encounter.discovered && styles.discoveredCard
+              ]}
               onPress={() => handleEncounterPress(encounter)}
-              pinColor={encounter.discovered ? '#00FF00' : '#FF0000'}
-            />
+            >
+              <Text style={styles.pokemonName}>
+                {pokemon?.name || 'Loading...'} #{encounter.id}
+              </Text>
+              <Text style={styles.encounterInfo}>Biome: {encounter.biome}</Text>
+              <Text style={styles.encounterInfo}>
+                Distance: {Math.round(distance)}m away
+              </Text>
+              <Text style={styles.encounterStatus}>
+                {encounter.discovered ? '✅ Caught' : distance < 100 ? '🎯 In Range!' : '🚶 Too Far'}
+              </Text>
+            </TouchableOpacity>
           );
         })}
-      </MapView>
+      </ScrollView>
 
       <View style={styles.infoPanel}>
         <Text style={styles.infoText}>
           Pokemon Found: {encounters.filter(e => e.discovered).length}/{encounters.length}
         </Text>
         <Text style={styles.infoText}>
-          Tap on red markers to encounter Pokemon!
+          Tap on Pokemon to encounter them!
         </Text>
       </View>
     </View>
@@ -200,9 +218,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     color: '#fff',
   },
-  map: {
-    flex: 1,
-  },
+
   infoPanel: {
     backgroundColor: '#fff',
     padding: 16,
@@ -248,6 +264,51 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: 'bold',
+  },
+  listContainer: {
+    flex: 1,
+    padding: 16,
+  },
+  locationText: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  encounterCard: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 2,
+    borderColor: '#FF0000',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  discoveredCard: {
+    borderColor: '#00FF00',
+    opacity: 0.7,
+  },
+  pokemonName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 8,
+    textTransform: 'capitalize',
+  },
+  encounterInfo: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 4,
+  },
+  encounterStatus: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#FF0000',
+    marginTop: 8,
   },
 });
 
