@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Pokemon } from '../services/pokeApi';
+import { LazyImage } from './LazyImage';
 
 interface PokemonCardProps {
   pokemon: Pokemon;
@@ -40,10 +41,13 @@ const PokemonCard: React.FC<PokemonCardProps> = ({ pokemon, onPress, isDiscovere
           <Text style={styles.discoveredText}>✓</Text>
         </View>
       )}
-      <Image
+      <LazyImage
         source={{ uri: pokemon.sprites.other?.['official-artwork']?.front_default || pokemon.sprites.front_default }}
         style={styles.image}
         resizeMode="contain"
+        showLoading={true}
+        loadingSize="small"
+        fadeInDuration={300}
       />
       <View style={styles.info}>
         <Text style={styles.name}>{pokemon.name.charAt(0).toUpperCase() + pokemon.name.slice(1)}</Text>

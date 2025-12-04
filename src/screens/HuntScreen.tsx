@@ -7,13 +7,14 @@ import {
   ActivityIndicator,
   ScrollView,
   Dimensions,
-  Image,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useNavigation } from '@react-navigation/native';
 import { locationService, Location, PokemonEncounter } from '../services/locationService';
 import { pokeApi, Pokemon } from '../services/pokeApi';
 import { discoveryService } from '../services/discoveryService';
+import { LazyImage } from '../components/LazyImage';
+import { imageCacheService } from '../services/imageCache';
 
 const { width } = Dimensions.get('window');
 
@@ -79,14 +80,24 @@ const HuntScreen: React.FC = () => {
       const newEncounters = locationService.generatePokemonEncounters(currentLocation);
       
       const pokemonDataMap: { [key: number]: Pokemon } = {};
+      const spritesToPreload: string[] = [];
+      
       for (const encounter of newEncounters) {
         try {
           const pokemon = await pokeApi.getPokemon(encounter.id);
           pokemonDataMap[encounter.id] = pokemon;
+          
+          // Collect sprites for preloading
+          if (pokemon.sprites.front_default) {
+            spritesToPreload.push(pokemon.sprites.front_default);
+          }
         } catch (error) {
           console.error(`Failed to load Pokemon ${encounter.id}:`, error);
         }
       }
+      
+      // Preload all sprites for better performance
+      await imageCacheService.preloadImages(spritesToPreload);
       
       setLocation(currentLocation);
       setEncounters(newEncounters);
@@ -281,9 +292,12 @@ const HuntScreen: React.FC = () => {
                 onPress={() => handleEncounterPress(encounter)}
               >
                 {pokemon && (
-                  <Image 
+                  <LazyImage 
                     source={{ uri: pokemon.sprites.front_default }} 
                     style={styles.pokemonSprite}
+                    showLoading={true}
+                    loadingSize="small"
+                    fadeInDuration={300}
                   />
                 )}
                 <View style={styles.cardContent}>
