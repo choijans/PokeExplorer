@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,8 +8,12 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
+  Platform,
+  PermissionsAndroid,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import Voice, { SpeechResultsEvent, SpeechErrorEvent } from '@react-native-voice/voice';
+import { PERMISSIONS, request, RESULTS } from 'react-native-permissions';
 import PokemonCard from './PokemonCard';
 import { Pokemon, pokeApi } from '../services/pokeApi';
 import { discoveryService } from '../services/discoveryService';
@@ -21,11 +25,79 @@ const PokedexList: React.FC = () => {
   const [searchResults, setSearchResults] = useState<Pokemon[]>([]);
   const [loading, setLoading] = useState(false);
   const [discoveredIds, setDiscoveredIds] = useState<Set<number>>(new Set());
+  const [isListening, setIsListening] = useState(false);
+  const [voiceAvailable, setVoiceAvailable] = useState(true);
+
+  const performSearch = useCallback(async (query: string) => {
+    if (!query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const results = await pokeApi.searchPokemon(query);
+      setSearchResults(results);
+      if (results.length === 0) {
+        Alert.alert('No Results', `No Pokemon found for "${query}"`);
+      }
+    } catch (err) {
+      console.error('Search error:', err);
+      Alert.alert('Error', 'Pokemon not found');
+      setSearchResults([]);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const setupVoiceRecognition = useCallback(() => {
+    Voice.onSpeechStart = () => {
+      console.log('Speech recognition started');
+      setIsListening(true);
+    };
+
+    Voice.onSpeechEnd = () => {
+      console.log('Speech recognition ended');
+      setIsListening(false);
+    };
+
+    Voice.onSpeechResults = (e: SpeechResultsEvent) => {
+      console.log('Speech results:', e.value);
+      if (e.value && e.value.length > 0) {
+        const recognizedText = e.value[0];
+        setSearchQuery(recognizedText);
+        // Automatically trigger search after speech recognition
+        performSearch(recognizedText);
+      }
+    };
+
+    Voice.onSpeechError = (e: SpeechErrorEvent) => {
+      console.log('Speech error:', e.error);
+      setIsListening(false);
+      
+      if (e.error?.message && e.error.message !== 'No speech input') {
+        Alert.alert('Voice Recognition Error', 'Could not recognize speech. Please try again.');
+      }
+    };
+  }, [performSearch]);
 
   useEffect(() => {
     loadInitialPokemon();
     loadDiscoveredPokemon();
-  }, []);
+    setupVoiceRecognition();
+    
+    // Check if Voice module is available
+    if (!Voice || typeof Voice.start !== 'function') {
+      console.warn('Voice module not available - likely Xiaomi/Huawei device or RN 0.82 compatibility issue');
+      setVoiceAvailable(false);
+    }
+
+    return () => {
+      if (Voice && Voice.destroy) {
+        Voice.destroy().then(Voice.removeAllListeners).catch(e => console.log('Voice cleanup error:', e));
+      }
+    };
+  }, [setupVoiceRecognition]);
 
   const loadDiscoveredPokemon = async () => {
     const discovered = await discoveryService.getDiscoveredPokemon();
@@ -33,63 +105,137 @@ const PokedexList: React.FC = () => {
   };
 
   const loadInitialPokemon = async () => {
-    console.log('Loading initial Pokemon...');
     setLoading(true);
-
-    // Test connection first
     const connectionOk = await pokeApi.testConnection();
     if (!connectionOk) {
-      Alert.alert('Connection Error', 'Cannot connect to Pokemon API. Please check your internet connection.');
+      Alert.alert('Connection Error', 'Cannot connect to Pokemon API.');
       setLoading(false);
       return;
     }
 
     try {
-      console.log('Fetching Pokemon list...');
       const list = await pokeApi.getPokemonList(20, 0);
-      console.log(`Fetched ${list.length} Pokemon from list`);
       const pokemonList: Pokemon[] = [];
       for (const item of list) {
-        const id = parseInt(item.url.split('/')[6]);
-        console.log(`Fetching Pokemon ${id}...`);
+        const id = parseInt(item.url.split('/')[6], 10);
         const poke = await pokeApi.getPokemon(id);
         pokemonList.push(poke);
       }
-      console.log(`Loaded ${pokemonList.length} Pokemon`);
       setPokemon(pokemonList);
-    } catch (error) {
-      console.error('Error loading Pokemon:', error);
-      Alert.alert('Connection Error', 'Unable to load Pokemon. Please check your internet connection and try again.');
+    } catch (err) {
+      console.error('Error loading Pokemon:', err);
+      Alert.alert('Error', 'Unable to load Pokemon.');
     } finally {
       setLoading(false);
     }
   };
 
   const handleSearch = async () => {
-    if (!searchQuery.trim()) {
-      setSearchResults([]);
-      return;
-    }
+    await performSearch(searchQuery);
+  };
 
-    console.log('Searching for:', searchQuery);
-    setLoading(true);
+  const requestMicrophonePermission = async (): Promise<boolean> => {
     try {
-      const results = await pokeApi.searchPokemon(searchQuery);
-      console.log('Search results:', results);
-      setSearchResults(results);
-    } catch (error) {
-      console.error('Search error:', error);
-      Alert.alert('Error', 'Pokemon not found');
-      setSearchResults([]);
-    } finally {
-      setLoading(false);
+      if (Platform.OS === 'android') {
+        const granted = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+          {
+            title: 'Microphone Permission',
+            message: 'PokeExplorer needs access to your microphone for voice search.',
+            buttonNeutral: 'Ask Me Later',
+            buttonNegative: 'Cancel',
+            buttonPositive: 'OK',
+          }
+        );
+        return granted === PermissionsAndroid.RESULTS.GRANTED;
+      } else {
+        // iOS
+        const speechResult = await request(PERMISSIONS.IOS.SPEECH_RECOGNITION);
+        const micResult = await request(PERMISSIONS.IOS.MICROPHONE);
+        return speechResult === RESULTS.GRANTED && micResult === RESULTS.GRANTED;
+      }
+    } catch (err) {
+      console.error('Permission request error:', err);
+      return false;
     }
   };
 
-  const handlePokemonPress = (pokemon: Pokemon) => {
+  const startVoiceRecognition = async () => {
+    try {
+      // First check if Voice module is properly initialized
+      if (!voiceAvailable || !Voice || typeof Voice.start !== 'function') {
+        console.error('Voice module not initialized properly');
+        setVoiceAvailable(false);
+        Alert.alert(
+          'Voice Recognition Unavailable',
+          'Voice recognition is not available on this device.\n\n' +
+          'Common causes:\n' +
+          '• Xiaomi/Redmi phones (MIUI compatibility)\n' +
+          '• Huawei phones (no Google Play Services)\n' +
+          '• Custom Android ROMs\n' +
+          '• React Native 0.82 new architecture limitations\n\n' +
+          'Please use the text search instead.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      const hasPermission = await requestMicrophonePermission();
+      
+      if (!hasPermission) {
+        Alert.alert(
+          'Permission Required',
+          'Microphone permission is required for voice search. Please enable it in settings.'
+        );
+        return;
+      }
+
+      setIsListening(true);
+      await Voice.start('en-US');
+    } catch (err: any) {
+      console.error('Error starting voice recognition:', err);
+      setIsListening(false);
+      
+      // Check for specific error types
+      const errorMessage = err?.message || '';
+      
+      if (errorMessage.includes('startSpeech') || errorMessage.includes('null')) {
+        setVoiceAvailable(false);
+        Alert.alert(
+          'Voice Recognition Not Supported',
+          'Your device does not support voice recognition.\n\n' +
+          'Common on Xiaomi (MIUI), Huawei, and some custom ROMs.\n\n' +
+          'Please use the text search feature instead.',
+          [{ text: 'OK' }]
+        );
+      } else if (errorMessage.includes('not available') || errorMessage.includes('SERVICE_NOT_AVAILABLE')) {
+        setVoiceAvailable(false);
+        Alert.alert(
+          'Service Not Available',
+          'Google Speech Recognition is not available on your device.\n\n' +
+          'Please use the text search feature instead.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        Alert.alert('Error', 'Failed to start voice recognition. Please use text search instead.');
+      }
+    }
+  };
+
+  const stopVoiceRecognition = async () => {
+    try {
+      await Voice.stop();
+      setIsListening(false);
+    } catch (err) {
+      console.error('Error stopping voice recognition:', err);
+      setIsListening(false);
+    }
+  };
+
+  const handlePokemonPress = (selectedPokemon: Pokemon) => {
     const parentNavigation = navigation.getParent();
     if (parentNavigation) {
-      parentNavigation.navigate('PokedexDetail', { pokemon });
+      parentNavigation.navigate('PokedexDetail', { pokemon: selectedPokemon });
     }
   };
 
@@ -113,12 +259,33 @@ const PokedexList: React.FC = () => {
           placeholder="Search Pokemon by name or ID..."
           value={searchQuery}
           onChangeText={setSearchQuery}
-          onSubmitEditing={handleSearch}
+          onSubmitEditing={() => handleSearch()}
         />
         <TouchableOpacity style={styles.searchButton} onPress={handleSearch}>
           <Text style={styles.searchButtonText}>Search</Text>
         </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.voiceButton, 
+            isListening && styles.voiceButtonActive,
+            !voiceAvailable && styles.voiceButtonDisabled
+          ]}
+          onPress={isListening ? stopVoiceRecognition : startVoiceRecognition}
+          disabled={!voiceAvailable && !isListening}
+        >
+          <Text style={styles.voiceButtonText}>
+            {!voiceAvailable ? '🚫' : isListening ? '⏹️' : '🎤'}
+          </Text>
+        </TouchableOpacity>
       </View>
+
+      {!voiceAvailable && (
+        <View style={styles.warningContainer}>
+          <Text style={styles.warningText}>
+            ⚠️ Voice search unavailable on this device. Use text search instead.
+          </Text>
+        </View>
+      )}
 
       {loading ? (
         <View style={styles.loadingContainer}>
@@ -153,7 +320,7 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     flexDirection: 'row',
-    marginBottom: 20,
+    marginBottom: 10,
   },
   searchInput: {
     flex: 1,
@@ -173,6 +340,36 @@ const styles = StyleSheet.create({
   searchButtonText: {
     color: '#fff',
     fontWeight: 'bold',
+  },
+  voiceButton: {
+    backgroundColor: '#28a745',
+    padding: 12,
+    borderRadius: 8,
+    justifyContent: 'center',
+    marginLeft: 10,
+  },
+  voiceButtonActive: {
+    backgroundColor: '#dc3545',
+  },
+  voiceButtonDisabled: {
+    backgroundColor: '#6c757d',
+    opacity: 0.6,
+  },
+  voiceButtonText: {
+    fontSize: 18,
+  },
+  warningContainer: {
+    backgroundColor: '#fff3cd',
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#ffc107',
+  },
+  warningText: {
+    color: '#856404',
+    fontSize: 12,
+    textAlign: 'center',
   },
   loadingContainer: {
     flex: 1,

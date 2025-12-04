@@ -35,6 +35,10 @@
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>PokeExplorer needs your location to discover Pokémon nearby</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>PokeExplorer needs access to your microphone for voice search</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>PokeExplorer needs speech recognition to search Pokémon by voice</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>
