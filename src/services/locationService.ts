@@ -1,6 +1,5 @@
-
-import { PermissionsAndroid, Platform, Alert } from 'react-native';
-import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
+import { Platform, PermissionsAndroid } from 'react-native';
+import Geolocation from '@react-native-community/geolocation';
 
 export interface Location {
   latitude: number;
@@ -19,17 +18,52 @@ class LocationService {
   private currentLocation: Location | null = null;
 
   async requestLocationPermission(): Promise<boolean> {
-    return true;
+    if (Platform.OS === 'ios') {
+      return true;
+    }
+    
+    try {
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+      );
+      return granted === PermissionsAndroid.RESULTS.GRANTED;
+    } catch (err) {
+      return false;
+    }
   }
 
   async getCurrentLocation(): Promise<Location> {
-    // Mock location for demo
-    const location = {
-      latitude: 37.7749,
-      longitude: -122.4194,
-    };
-    this.currentLocation = location;
-    return location;
+    return new Promise((resolve, reject) => {
+      Geolocation.getCurrentPosition(
+        (position) => {
+          const location = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          };
+          this.currentLocation = location;
+          resolve(location);
+        },
+        (error) => reject(error),
+        { enableHighAccuracy: false, timeout: 30000, maximumAge: 10000 }
+      );
+    });
+  }
+
+  async watchLocation(callback: (location: Location) => void): Promise<any> {
+    const watchId = Geolocation.watchPosition(
+      (position) => {
+        const location = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        };
+        this.currentLocation = location;
+        callback(location);
+      },
+      (error) => console.error('Location watch error:', error),
+      { enableHighAccuracy: false, distanceFilter: 10, timeout: 30000 }
+    );
+    
+    return { remove: () => Geolocation.clearWatch(watchId) };
   }
 
   getBiomeFromLocation(location: Location): string {
