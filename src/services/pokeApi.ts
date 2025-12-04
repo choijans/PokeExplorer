@@ -31,7 +31,7 @@ export interface Pokemon {
   weight: number;
 }
 
-const BASE_URL = 'https://pokeapi.co/api/';
+const BASE_URL = 'https://pokeapi.co/api/v2';
 
 class PokeAPI {
   private cache = new Map<string, any>();
