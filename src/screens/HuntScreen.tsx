@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   ScrollView,
-  Dimensions,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useNavigation } from '@react-navigation/native';
@@ -15,8 +14,6 @@ import { pokeApi, Pokemon } from '../services/pokeApi';
 import { discoveryService } from '../services/discoveryService';
 import { LazyImage } from '../components/LazyImage';
 import { imageCacheService } from '../services/imageCache';
-
-const { width } = Dimensions.get('window');
 
 const HuntScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -27,6 +24,9 @@ const HuntScreen: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showMap, setShowMap] = useState(true);
   const [locationWatcher, setLocationWatcher] = useState<any>(null);
+  const webViewRef = useRef<WebView>(null);
+  const spawnIntervalRef = useRef<any>(null);
+  const despawnIntervalRef = useRef<any>(null);
 
   useEffect(() => {
     const init = async () => {
@@ -34,6 +34,7 @@ const HuntScreen: React.FC = () => {
         await initializeHunt();
         const watcher = await locationService.watchLocation((newLocation) => {
           setLocation(newLocation);
+          updateMapLocation(newLocation);
         });
         setLocationWatcher(watcher);
       } catch (error) {
@@ -45,6 +46,12 @@ const HuntScreen: React.FC = () => {
     return () => {
       if (locationWatcher) {
         locationWatcher.remove();
+      }
+      if (spawnIntervalRef.current) {
+        clearInterval(spawnIntervalRef.current);
+      }
+      if (despawnIntervalRef.current) {
+        clearInterval(despawnIntervalRef.current);
       }
     };
   }, []);
@@ -77,6 +84,7 @@ const HuntScreen: React.FC = () => {
       }
 
       const currentLocation = await locationService.getCurrentLocation();
+      console.log('Got location:', currentLocation);
       const newEncounters = locationService.generatePokemonEncounters(currentLocation);
       
       const pokemonDataMap: { [key: number]: Pokemon } = {};
@@ -102,10 +110,24 @@ const HuntScreen: React.FC = () => {
       setLocation(currentLocation);
       setEncounters(newEncounters);
       setPokemonData(pokemonDataMap);
+      setLoading(false);
+      
+      // Start spawn interval - new Pokemon every 30 seconds
+      spawnIntervalRef.current = setInterval(() => {
+        spawnNewPokemon(currentLocation);
+      }, 30000);
+      
+      // Start despawn interval - remove Pokemon after 5 minutes
+      despawnIntervalRef.current = setInterval(() => {
+        despawnOldPokemon();
+      }, 60000);
     } catch (error: any) {
       console.error('Hunt error:', error);
-      setError(error.message || 'Failed to initialize');
-    } finally {
+      // Use fallback location on error
+      const fallbackLocation = { latitude: 10.35168, longitude: 123.91317 };
+      setLocation(fallbackLocation);
+      const newEncounters = locationService.generatePokemonEncounters(fallbackLocation);
+      setEncounters(newEncounters);
       setLoading(false);
     }
   };
@@ -125,19 +147,113 @@ const HuntScreen: React.FC = () => {
     navigation.navigate('ARCapture', { pokemon, biome: encounter.biome });
   };
 
+  const spawnNewPokemon = async (currentLocation: Location) => {
+    const newEncounter = locationService.generatePokemonEncounters(currentLocation)[0];
+    if (!newEncounter) return;
+    
+    try {
+      const pokemon = await pokeApi.getPokemon(newEncounter.id);
+      setPokemonData(prev => ({ ...prev, [newEncounter.id]: pokemon }));
+      setEncounters(prev => [...prev, newEncounter]);
+      console.log(`New Pokemon spawned: ${pokemon.name}`);
+    } catch (error) {
+      console.error('Failed to spawn Pokemon:', error);
+    }
+  };
+  
+  const despawnOldPokemon = () => {
+    const now = Date.now();
+    const fiveMinutes = 5 * 60 * 1000;
+    
+    setEncounters(prev => {
+      const remaining = prev.filter(e => {
+        const age = now - e.spawnTime;
+        if (age > fiveMinutes && !e.discovered) {
+          console.log(`Pokemon ${e.id} despawned`);
+          return false;
+        }
+        return true;
+      });
+      return remaining;
+    });
+  };
+
   const refreshHunt = () => {
     initializeHunt();
   };
 
-  const calculateMapPosition = (pokemonLat: number, pokemonLng: number) => {
-    if (!location) return { x: 50, y: 50 };
-    const latDiff = (pokemonLat - location.latitude) * 100000;
-    const lngDiff = (pokemonLng - location.longitude) * 100000;
-    
-    const x = 50 + (lngDiff * 5);
-    const y = 50 - (latDiff * 5);
-    
-    return { x: Math.max(10, Math.min(90, x)), y: Math.max(10, Math.min(90, y)) };
+  const updateMapLocation = (newLocation: Location) => {
+    if (!webViewRef.current || !showMap) return;
+    webViewRef.current.injectJavaScript(`
+      if (window.map && window.playerMarker) {
+        window.map.setView([${newLocation.latitude}, ${newLocation.longitude}]);
+        window.playerMarker.setLatLng([${newLocation.latitude}, ${newLocation.longitude}]);
+      }
+      true;
+    `);
+  };
+
+  const getMapHTML = () => {
+    if (!location) return '';
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <style>
+          body { margin: 0; padding: 0; }
+          #map { width: 100vw; height: 100vh; }
+        </style>
+      </head>
+      <body>
+        <div id="map"></div>
+        <script>
+          const map = L.map('map').setView([${location.latitude}, ${location.longitude}], 17);
+          window.map = map;
+          
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap',
+            maxZoom: 19
+          }).addTo(map);
+          
+          const playerIcon = L.divIcon({
+            html: '<img src="https://play.pokemonshowdown.com/sprites/trainers/red.png" style="width:48px;height:48px;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5));image-rendering:pixelated;" />',
+            className: '',
+            iconSize: [48, 48],
+            iconAnchor: [24, 24]
+          });
+          
+          const playerMarker = L.marker([${location.latitude}, ${location.longitude}], { icon: playerIcon }).addTo(map);
+          window.playerMarker = playerMarker;
+          
+          L.circle([${location.latitude}, ${location.longitude}], {
+            color: 'red',
+            fillColor: '#f03',
+            fillOpacity: 0.1,
+            radius: 100
+          }).addTo(map);
+          
+          ${encounters.map((e, i) => {
+            const pokemon = pokemonData[e.id];
+            if (!pokemon) return '';
+            return `
+              const pokemonIcon${i} = L.divIcon({
+                html: '<img src="${pokemon.sprites.front_default}" style="width:40px;height:40px;${e.discovered ? 'opacity:0.5;filter:grayscale(1);' : ''}" />',
+                className: '',
+                iconSize: [40, 40],
+                iconAnchor: [20, 20]
+              });
+              L.marker([${e.location.latitude}, ${e.location.longitude}], { icon: pokemonIcon${i} })
+                .addTo(map)
+                .on('click', () => window.ReactNativeWebView.postMessage('${i}'));
+            `;
+          }).join('')}
+        </script>
+      </body>
+      </html>
+    `;
   };
 
   if (loading) {
@@ -161,89 +277,6 @@ const HuntScreen: React.FC = () => {
   }
 
   if (!location) return null;
-
-  // Import MapScreen component
-  const MapScreen = require('./MapScreen').default;
-
-  const mapHtml = `
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <style>
-          body { margin: 0; padding: 0; overflow: hidden; }
-          #map { 
-            width: 100vw; 
-            height: 100vh; 
-            background: linear-gradient(180deg, #87CEEB 0%, #98D8C8 100%);
-            position: relative;
-          }
-          .player { 
-            width: 50px; 
-            height: 50px; 
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 40px;
-            z-index: 100;
-            animation: pulse 1.5s infinite;
-          }
-          @keyframes pulse {
-            0%, 100% { transform: translate(-50%, -50%) scale(1); }
-            50% { transform: translate(-50%, -50%) scale(1.1); }
-          }
-          .pokemon { 
-            width: 60px; 
-            height: 60px; 
-            position: absolute;
-            transform: translate(-50%, -50%);
-            cursor: pointer;
-            transition: all 0.3s;
-          }
-          .pokemon:active {
-            transform: translate(-50%, -50%) scale(1.2);
-          }
-          .pokemon img {
-            width: 100%;
-            height: 100%;
-            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
-          }
-          .caught {
-            opacity: 0.5;
-            filter: grayscale(1);
-          }
-          .range-circle {
-            width: 200px;
-            height: 200px;
-            border: 3px dashed rgba(255,255,255,0.5);
-            border-radius: 50%;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            pointer-events: none;
-          }
-        </style>
-      </head>
-      <body>
-        <div id="map">
-          <div class="range-circle"></div>
-          <div class="player">🧑</div>
-          ${encounters.map((e, i) => {
-            const pos = calculateMapPosition(e.location.latitude, e.location.longitude);
-            const pokemon = pokemonData[e.id];
-            const sprite = pokemon?.sprites?.front_default || '';
-            return `<div class="pokemon ${e.discovered ? 'caught' : ''}" 
-              style="left: ${pos.x}%; top: ${pos.y}%;" 
-              onclick="window.ReactNativeWebView.postMessage('${i}')">
-              ${sprite ? `<img src="${sprite}" />` : '❓'}
-            </div>`;
-          }).join('')}
-        </div>
-      </body>
-    </html>
-  `;
 
   return (
     <View style={styles.container}>
@@ -269,7 +302,15 @@ const HuntScreen: React.FC = () => {
       </View>
       
       {showMap ? (
-        <MapScreen />
+        <WebView
+          ref={webViewRef}
+          source={{ html: getMapHTML() }}
+          style={styles.map}
+          onMessage={(event) => {
+            const index = parseInt(event.nativeEvent.data);
+            handleEncounterPress(encounters[index]);
+          }}
+        />
       ) : (
         <ScrollView style={styles.listContainer}>
           <Text style={styles.locationText}>
@@ -328,6 +369,11 @@ const HuntScreen: React.FC = () => {
         <Text style={styles.infoText}>
           {showMap ? 'Tap Pokemon on map to catch!' : 'Get within 100m to catch!'}
         </Text>
+        {showMap && (
+          <Text style={styles.gpsText}>
+            📍 GPS: {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
+          </Text>
+        )}
       </View>
     </View>
   );
@@ -344,7 +390,7 @@ const styles = StyleSheet.create({
   activeButtonText: { color: '#FF0000' },
   refreshButton: { backgroundColor: 'rgba(255,255,255,0.3)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 15 },
   refreshButtonText: { fontSize: 16, color: '#fff' },
-  webview: { flex: 1 },
+  map: { flex: 1 },
   listContainer: { flex: 1, padding: 16 },
   locationText: { fontSize: 14, color: '#666', marginBottom: 16, textAlign: 'center' },
   encounterCard: { backgroundColor: '#fff', padding: 16, borderRadius: 12, marginBottom: 12, borderWidth: 2, borderColor: '#ddd', flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
@@ -358,6 +404,7 @@ const styles = StyleSheet.create({
   inRangeStatus: { color: '#FF0000', fontSize: 16 },
   infoPanel: { backgroundColor: '#fff', padding: 12, borderTopWidth: 1, borderTopColor: '#ddd' },
   infoText: { fontSize: 13, color: '#666', textAlign: 'center', marginBottom: 2 },
+  gpsText: { fontSize: 10, color: '#999', textAlign: 'center', marginTop: 4, fontFamily: 'monospace' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f0f8ff' },
   loadingText: { marginTop: 16, fontSize: 16, color: '#666' },
   errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f0f8ff', padding: 20 },

@@ -4,12 +4,14 @@ import PokedexScreen from '../screens/PokedexScreen';
 import HuntScreen from '../screens/HuntScreen';
 import CollectionScreen from '../screens/CollectionScreen';
 import UserProfileScreen from '../screens/UserProfileScreen';
+import SocialScreen from '../screens/SocialScreen';
 import { Text } from 'react-native';
 
 export type TabParamList = {
   Pokedex: undefined;
   Hunt: undefined;
   Collection: undefined;
+  Social: undefined;
   Profile: undefined;
 };
 
@@ -52,6 +54,14 @@ const BottomTabNavigator: React.FC = () => {
         options={{
           tabBarLabel: 'Collection',
           tabBarIcon: ({ color }) => <Text style={{ fontSize: 24, color }}>🏆</Text>,
+        }}
+      />
+      <Tab.Screen
+        name="Social"
+        component={SocialScreen}
+        options={{
+          tabBarLabel: 'Social',
+          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24, color }}>👥</Text>,
         }}
       />
       <Tab.Screen

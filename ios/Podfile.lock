@@ -1225,6 +1225,10 @@ PODS:
     - React-RCTImage
   - RNShare (10.2.1):
     - React-Core
+  - RNVectorIcons (10.0.3):
+    - glog
+    - RCT-Folly (= 2022.05.16.00)
+    - React-Core
   - SocketRocket (0.6.1)
   - VisionCamera (3.9.2):
     - React
@@ -1300,6 +1304,7 @@ DEPENDENCIES:
   - RNReanimated (from `../node_modules/react-native-reanimated`)
   - RNScreens (from `../node_modules/react-native-screens`)
   - RNShare (from `../node_modules/react-native-share`)
+  - RNVectorIcons (from `../node_modules/react-native-vector-icons`)
   - VisionCamera (from `../node_modules/react-native-vision-camera`)
   - Yoga (from `../node_modules/react-native/ReactCommon/yoga`)
 
@@ -1459,6 +1464,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/react-native-screens"
   RNShare:
     :path: "../node_modules/react-native-share"
+  RNVectorIcons:
+    :path: "../node_modules/react-native-vector-icons"
   VisionCamera:
     :path: "../node_modules/react-native-vision-camera"
   Yoga:
@@ -1551,10 +1558,11 @@ SPEC CHECKSUMS:
   RNReanimated: 5bdfe65adcdb4d6d5ad38d68b80fff2f77c99460
   RNScreens: da54176e30d05e30cf6d4dc7c1b72dd50e0513bb
   RNShare: 694e19d7f74ac4c04de3a8af0649e9ccc03bd8b1
+  RNVectorIcons: adcba74c602515e8c08918a30ccaf2e0a04d4002
   SocketRocket: f32cd54efbe0f095c4d7594881e52619cfe80b17
   VisionCamera: 6a90992822a293947af96e77618933405a417871
   Yoga: fb61b2337c7688c81a137e5560b3cbb515289f91
 
 PODFILE CHECKSUM: 9f49fe7f1952cc0b9912dd0b1862332d39cd7455
 
-COCOAPODS: 1.16.2
+COCOAPODS: 1.15.2

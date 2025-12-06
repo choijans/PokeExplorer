@@ -12,6 +12,8 @@ export interface PokemonEncounter {
   location: Location;
   biome: string;
   discovered: boolean;
+  rarity: 'common' | 'uncommon' | 'rare' | 'legendary';
+  spawnTime: number;
 }
 
 class LocationService {
@@ -33,18 +35,25 @@ class LocationService {
   }
 
   async getCurrentLocation(): Promise<Location> {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
+      const fallback = { latitude: 10.35168, longitude: 123.91317 };
+      
       Geolocation.getCurrentPosition(
         (position) => {
           const location = {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
           };
+          console.log('Location:', location, 'Accuracy:', position.coords.accuracy + 'm');
           this.currentLocation = location;
           resolve(location);
         },
-        (error) => reject(error),
-        { enableHighAccuracy: false, timeout: 30000, maximumAge: 10000 }
+        (error) => {
+          console.log('Location error, using fallback:', error.message);
+          const loc = this.currentLocation || fallback;
+          resolve(loc);
+        },
+        { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 }
       );
     });
   }
@@ -56,11 +65,15 @@ class LocationService {
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
         };
-        this.currentLocation = location;
-        callback(location);
+        const accuracy = position.coords.accuracy;
+        if (accuracy < 200) {
+          console.log('Location update:', location, 'Accuracy:', accuracy + 'm');
+          this.currentLocation = location;
+          callback(location);
+        }
       },
       (error) => console.error('Location watch error:', error),
-      { enableHighAccuracy: true, distanceFilter: 5, interval: 1000, fastestInterval: 500 }
+      { enableHighAccuracy: false, distanceFilter: 10, interval: 5000, maximumAge: 10000 }
     );
     
     return { remove: () => Geolocation.clearWatch(watchId) };
@@ -91,27 +104,37 @@ class LocationService {
   generatePokemonEncounters(location: Location): PokemonEncounter[] {
     const biome = this.getBiomeFromLocation(location);
     const encounters: PokemonEncounter[] = [];
-    
-    // Generate 3-5 random encounters within 1km radius
     const encounterCount = Math.floor(Math.random() * 3) + 3;
+    const now = Date.now();
     
     for (let i = 0; i < encounterCount; i++) {
-      const pokemonId = this.getPokemonIdForBiome(biome);
+      const rarity = this.getRandomRarity();
+      const pokemonId = this.getPokemonIdForBiome(biome, rarity);
       const encounterLocation = this.generateNearbyLocation(location);
       
       encounters.push({
         id: pokemonId,
-        name: `pokemon-${pokemonId}`, // Will be resolved later
+        name: `pokemon-${pokemonId}`,
         location: encounterLocation,
         biome,
         discovered: false,
+        rarity,
+        spawnTime: now,
       });
     }
     
     return encounters;
   }
 
-  private getPokemonIdForBiome(biome: string): number {
+  private getRandomRarity(): 'common' | 'uncommon' | 'rare' | 'legendary' {
+    const rand = Math.random();
+    if (rand < 0.7) return 'common';
+    if (rand < 0.9) return 'uncommon';
+    if (rand < 0.98) return 'rare';
+    return 'legendary';
+  }
+
+  private getPokemonIdForBiome(biome: string, rarity: string): number {
     const biomePokemons: { [key: string]: number[] } = {
       water: [7, 8, 9, 54, 55, 72, 73, 90, 91, 98, 99, 116, 117, 118, 119, 120, 121, 129, 130, 131, 134],
       grass: [1, 2, 3, 25, 43, 44, 45, 46, 47, 69, 70, 71, 102, 103, 114, 123, 127],
@@ -119,13 +142,15 @@ class LocationService {
       normal: [4, 5, 6, 10, 11, 12, 13, 14, 15, 16, 17, 18, 21, 22, 23, 24],
     };
     
-    const pokemonList = biomePokemons[biome] || biomePokemons.normal;
+    let pokemonList = biomePokemons[biome] || biomePokemons.normal;
+    if (rarity === 'legendary') pokemonList = [150, 151, 144, 145, 146];
+    else if (rarity === 'rare') pokemonList = pokemonList.filter(id => id > 100);
     return pokemonList[Math.floor(Math.random() * pokemonList.length)];
   }
 
   private generateNearbyLocation(center: Location): Location {
-    // Generate location within ~1km radius
-    const radiusInDegrees = 0.009; // Approximately 1km
+    // Generate location within ~500m radius for wider spawn range
+    const radiusInDegrees = 0.005; // Approximately 500m
     const randomAngle = Math.random() * 2 * Math.PI;
     const randomRadius = Math.random() * radiusInDegrees;
     

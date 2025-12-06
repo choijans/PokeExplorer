@@ -33,7 +33,9 @@
     "react-native-screens": "3.34.0",
     "react-native-share": "10.2.1",
     "react-native-vision-camera": "3.9.2",
-    "react-native-webview": "13.12.2"
+    "react-native-webview": "13.12.2",
+    "react-native-paper": "5.12.3",
+    "react-native-vector-icons": "10.0.3"
   },
   "devDependencies": {
     "@babel/core": "7.26.0",
