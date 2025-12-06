@@ -1,10 +1,11 @@
 import React, { useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
 import { RouteProp } from '@react-navigation/native';
 import { pokeApi } from '../services/pokeApi';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { LazyImage } from './LazyImage';
 import { imageCacheService } from '../services/imageCache';
+import sharingService from '../services/sharingService';
 
 type PokemonDetailRouteProp = RouteProp<RootStackParamList, 'PokedexDetail'>;
 
@@ -61,6 +62,24 @@ const PokemonDetail: React.FC<PokemonDetailProps> = ({ route }) => {
     return '#F44336';
   };
 
+  const handleShare = async () => {
+    const shareData = {
+      id: pokemon.id,
+      name: pokemon.name,
+      types: pokemon.types.map((t) => t.type.name),
+      height: pokemon.height,
+      weight: pokemon.weight,
+      abilities: pokemon.abilities.map((a) => a.ability.name),
+      stats: pokemon.stats.map((s) => ({
+        name: s.stat.name,
+        base_stat: s.base_stat,
+      })),
+      imageUrl: pokemon.sprites.other?.['official-artwork']?.front_default || pokemon.sprites.front_default,
+    };
+
+    await sharingService.sharePokemonDetails(shareData);
+  };
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
@@ -84,6 +103,9 @@ const PokemonDetail: React.FC<PokemonDetailProps> = ({ route }) => {
             </View>
           ))}
         </View>
+        <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
+          <Text style={styles.shareButtonText}>📤 Share</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.section}>
@@ -172,6 +194,20 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 14,
     fontWeight: 'bold',
+  },
+  shareButton: {
+    marginTop: 16,
+    backgroundColor: '#2c5aa0',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  shareButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
   },
   section: {
     backgroundColor: '#fff',
