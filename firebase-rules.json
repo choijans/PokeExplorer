@@ -22,17 +22,17 @@
     },
     "community": {
       "posts": {
+        ".read": true,
+        ".write": "auth != null",
         "$postId": {
           ".read": true,
-          ".write": "auth != null",
-          ".validate": "newData.hasChildren(['userId', 'username', 'content', 'timestamp'])"
+          ".write": "auth != null"
         }
       },
       "leaderboard": {
         ".read": true,
         "$uid": {
-          ".write": "$uid === auth.uid",
-          ".validate": "newData.hasChildren(['username', 'totalCaptured', 'updatedAt'])"
+          ".write": "$uid === auth.uid"
         }
       }
     }
