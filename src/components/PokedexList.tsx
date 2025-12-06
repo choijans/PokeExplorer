@@ -237,7 +237,7 @@ const PokedexList: React.FC = () => {
         <SectionCard>
           <View style={{ gap: theme.custom.spacing.md }}>
             <Searchbar
-              placeholder="Search Pokémon by name or ID"
+              placeholder="Search Pokémon"
               value={searchQuery}
               onChangeText={setSearchQuery}
               onSubmitEditing={handleSearch}

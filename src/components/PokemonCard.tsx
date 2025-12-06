@@ -65,7 +65,10 @@ const PokemonCard: React.FC<PokemonCardProps> = ({ pokemon, onPress, isDiscovere
         </View>
         <View style={styles.info}>
           <View style={styles.titleRow}>
-            <Text variant="titleMedium" style={{ color: theme.colors.onSurface }}>
+            <Text
+              variant="titleMedium"
+              style={{ color: theme.colors.onSurface, flexShrink: 1, minWidth: 0 }}
+            >
               {pokemon.name.charAt(0).toUpperCase() + pokemon.name.slice(1)}
             </Text>
             {isDiscovered && (
@@ -152,6 +155,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexWrap: 'wrap',
   },
 });
 

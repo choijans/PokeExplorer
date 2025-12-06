@@ -158,10 +158,10 @@ export const pokemonTheme: PokemonTheme = {
       xl: 32,
     },
     radius: {
-      sm: 12,
-      md: 18,
-      lg: 24,
-      xl: 32,
+      sm: 4,
+      md: 8,
+      lg: 12,
+      xl: 16,
     },
   },
 };
