@@ -28,6 +28,8 @@ import { discoveryService } from '../services/discoveryService';
 import { imageCacheService } from '../services/imageCache';
 import type { PokemonTheme } from '../theme';
 
+const PAGE_SIZE = 20;
+
 const PokedexList: React.FC = () => {
   const navigation = useNavigation();
   const theme = useTheme<PokemonTheme>();
@@ -39,6 +41,9 @@ const PokedexList: React.FC = () => {
   const [isListening, setIsListening] = useState(false);
   const [voiceAvailable, setVoiceAvailable] = useState(true);
   const [showVoiceBanner, setShowVoiceBanner] = useState(false);
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const performSearch = useCallback(async (query: string) => {
     if (!query.trim()) {
@@ -88,6 +93,103 @@ const PokedexList: React.FC = () => {
     };
   }, [performSearch]);
 
+  const loadPokemonPage = useCallback(
+    async (pageOffset: number, append: boolean) => {
+      if (append) {
+        setLoadingMore(true);
+      } else {
+        setLoading(true);
+      }
+
+      try {
+        const list = await pokeApi.getPokemonList(PAGE_SIZE, pageOffset);
+
+        if (list.length === 0) {
+          if (!append) {
+            setPokemon([]);
+          }
+          setHasMore(false);
+          return;
+        }
+
+        const pokemonIds = list
+          .map((item) => {
+            const segments = item.url.split('/').filter(Boolean);
+            const idString = segments[segments.length - 1];
+            return Number(idString);
+          })
+          .filter((id) => !Number.isNaN(id));
+
+        const details = await Promise.all(pokemonIds.map((id) => pokeApi.getPokemon(id)));
+
+        details.forEach((entry) => {
+          imageCacheService.prefetchPokemonSprites(entry.id);
+        });
+
+        setPokemon((prev) => {
+          if (!append) {
+            return details;
+          }
+
+          const existingIds = new Set(prev.map((p) => p.id));
+          const merged = [...prev];
+
+          details.forEach((poke) => {
+            if (!existingIds.has(poke.id)) {
+              merged.push(poke);
+              existingIds.add(poke.id);
+            }
+          });
+
+          return merged;
+        });
+
+        setOffset(pageOffset + list.length);
+        setHasMore(list.length === PAGE_SIZE);
+      } catch (err) {
+        console.error('Error loading Pokémon:', err);
+        Alert.alert('Error', append ? 'Unable to load more Pokémon.' : 'Unable to load Pokémon.');
+      } finally {
+        if (append) {
+          setLoadingMore(false);
+        } else {
+          setLoading(false);
+        }
+      }
+    },
+    [],
+  );
+
+  const loadDiscoveredPokemon = useCallback(async () => {
+    const discovered = await discoveryService.getDiscoveredPokemon();
+    setDiscoveredIds(new Set(discovered.map((p) => p.id)));
+  }, []);
+
+  const loadInitialPokemon = useCallback(async () => {
+    setHasMore(true);
+    setOffset(0);
+    setSearchResults([]);
+    setSearchQuery('');
+
+    setLoading(true);
+    const connectionOk = await pokeApi.testConnection();
+    if (!connectionOk) {
+      Alert.alert('Connection Error', 'Cannot connect to Pokémon API.');
+      setLoading(false);
+      return;
+    }
+
+    await loadPokemonPage(0, false);
+  }, [loadPokemonPage]);
+
+  const loadMorePokemon = useCallback(() => {
+    if (loading || loadingMore || !hasMore || searchResults.length > 0) {
+      return;
+    }
+
+    loadPokemonPage(offset, true);
+  }, [loading, loadingMore, hasMore, searchResults.length, loadPokemonPage, offset]);
+
   useEffect(() => {
     loadInitialPokemon();
     loadDiscoveredPokemon();
@@ -103,45 +205,7 @@ const PokedexList: React.FC = () => {
         Voice.destroy().then(Voice.removeAllListeners).catch((error) => console.log('Voice cleanup error:', error));
       }
     };
-  }, [setupVoiceRecognition]);
-
-  const loadDiscoveredPokemon = async () => {
-    const discovered = await discoveryService.getDiscoveredPokemon();
-    setDiscoveredIds(new Set(discovered.map((p) => p.id)));
-  };
-
-  const loadInitialPokemon = async () => {
-    setLoading(true);
-    const connectionOk = await pokeApi.testConnection();
-    if (!connectionOk) {
-      Alert.alert('Connection Error', 'Cannot connect to Pokémon API.');
-      setLoading(false);
-      return;
-    }
-
-    try {
-      const list = await pokeApi.getPokemonList(20, 0);
-      const pokemonList: Pokemon[] = [];
-      const pokemonIds: number[] = [];
-
-      for (const item of list) {
-        const id = parseInt(item.url.split('/')[6], 10);
-        pokemonIds.push(id);
-      }
-
-      for (const id of pokemonIds) {
-        const poke = await pokeApi.getPokemon(id);
-        pokemonList.push(poke);
-        imageCacheService.prefetchPokemonSprites(id);
-      }
-      setPokemon(pokemonList);
-    } catch (err) {
-      console.error('Error loading Pokémon:', err);
-      Alert.alert('Error', 'Unable to load Pokémon.');
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [loadInitialPokemon, loadDiscoveredPokemon, setupVoiceRecognition]);
 
   const handleSearch = async () => {
     await performSearch(searchQuery);
@@ -268,7 +332,7 @@ const PokedexList: React.FC = () => {
                 mode="contained-tonal"
                 icon="refresh"
                 onPress={loadInitialPokemon}
-                disabled={loading}
+                disabled={loading || loadingMore}
                 style={styles.actionButton}
               >
                 Refresh
@@ -311,6 +375,15 @@ const PokedexList: React.FC = () => {
             numColumns={1}
             contentContainerStyle={{ paddingBottom: theme.custom.spacing.xl }}
             showsVerticalScrollIndicator={false}
+            onEndReached={loadMorePokemon}
+            onEndReachedThreshold={0.4}
+            ListFooterComponent={
+              loadingMore ? (
+                <View style={styles.listFooter}>
+                  <ActivityIndicator animating size="small" color={theme.colors.primary} />
+                </View>
+              ) : null
+            }
           />
         )}
       </View>
@@ -337,6 +410,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  listFooter: {
+    paddingVertical: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
 
