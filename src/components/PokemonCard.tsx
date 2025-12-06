@@ -4,6 +4,7 @@ import { Card, Chip, Text, useTheme } from 'react-native-paper';
 import { Pokemon } from '../services/pokeApi';
 import { LazyImage } from './LazyImage';
 import type { PokemonTheme } from '../theme';
+import { chipStyles } from '../styles/chipStyles';
 
 interface PokemonCardProps {
   pokemon: Pokemon;
@@ -73,16 +74,15 @@ const PokemonCard: React.FC<PokemonCardProps> = ({ pokemon, onPress, isDiscovere
             </Text>
             {isDiscovered && (
               <Chip
-                compact
                 icon="check"
                 textStyle={{
                   color: theme.colors.onPrimary,
                   fontWeight: '600',
                 }}
-                style={{
-                  backgroundColor: theme.colors.tertiary,
-                  height: 28,
-                }}
+                style={[
+                  chipStyles.base,
+                  { backgroundColor: theme.colors.tertiary },
+                ]}
               >
                 Caught
               </Chip>
@@ -95,10 +95,9 @@ const PokemonCard: React.FC<PokemonCardProps> = ({ pokemon, onPress, isDiscovere
             {pokemon.types.map((typeInfo, index) => (
               <Chip
                 key={index}
-                compact
                 textStyle={styles.typeText}
                 style={[
-                  styles.typeChip,
+                  chipStyles.base,
                   {
                     backgroundColor: getTypeColor(typeInfo.type.name),
                   },
@@ -144,12 +143,10 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 6,
   },
-  typeChip: {
-    height: 28,
-  },
   typeText: {
     color: '#fff',
     fontWeight: '700',
+    lineHeight: 16,
   },
   titleRow: {
     flexDirection: 'row',

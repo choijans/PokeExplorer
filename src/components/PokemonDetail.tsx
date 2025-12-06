@@ -16,6 +16,7 @@ import sharingService from '../services/sharingService';
 import type { PokemonTheme } from '../theme';
 import Screen from './ui/Screen';
 import SectionCard from './ui/SectionCard';
+import { chipStyles } from '../styles/chipStyles';
 
  type PokemonDetailRouteProp = RouteProp<RootStackParamList, 'PokedexDetail'>;
 
@@ -119,9 +120,8 @@ const PokemonDetail: React.FC<PokemonDetailProps> = ({ route }) => {
                 {pokemon.types.map((typeInfo, index) => (
                   <Chip
                     key={index}
-                    compact
                     textStyle={styles.typeText}
-                    style={[styles.typeChip, { backgroundColor: getTypeColor(typeInfo.type.name) }]}
+                    style={[chipStyles.base, { backgroundColor: getTypeColor(typeInfo.type.name) }]}
                   >
                     {typeInfo.type.name.toUpperCase()}
                   </Chip>
@@ -218,13 +218,11 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
   },
-  typeChip: {
-    height: 28,
-  },
   typeText: {
     color: '#fff',
     fontWeight: '700',
     letterSpacing: 0.5,
+    lineHeight: 16,
   },
   shareButton: {
     alignSelf: 'flex-start',
