@@ -1,16 +1,23 @@
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  StyleSheet,
-  ActivityIndicator,
-} from 'react-native';
+import { View, FlatList, StyleSheet } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
 import { discoveryService, DiscoveredPokemon } from '../services/discoveryService';
 import { pokeApi, Pokemon } from '../services/pokeApi';
 import PokemonCard from '../components/PokemonCard';
+import Screen from '../components/ui/Screen';
+import SectionCard from '../components/ui/SectionCard';
+import {
+  ActivityIndicator,
+  Text,
+  useTheme,
+} from 'react-native-paper';
+import type { PokemonTheme } from '../theme';
+import type { RootStackParamList } from '../navigation/AppNavigator';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 const CollectionScreen: React.FC = () => {
+  const theme = useTheme<PokemonTheme>();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [discovered, setDiscovered] = useState<DiscoveredPokemon[]>([]);
   const [pokemonData, setPokemonData] = useState<{ [key: number]: Pokemon }>({});
   const [loading, setLoading] = useState(true);
@@ -46,113 +53,91 @@ const CollectionScreen: React.FC = () => {
     if (!pokemon) return null;
 
     return (
-      <View style={styles.itemContainer}>
-        <PokemonCard pokemon={pokemon} />
-        <View style={styles.discoveryInfo}>
-          <Text style={styles.discoveryText}>
-            Discovered: {new Date(item.discoveredAt).toLocaleDateString()}
-          </Text>
-          {item.biome && (
-            <Text style={styles.biomeText}>Biome: {item.biome}</Text>
-          )}
-        </View>
+      <View style={styles.cardWrapper}>
+        <PokemonCard
+          pokemon={pokemon}
+          isDiscovered
+          onPress={() => navigation.getParent()?.navigate('PokedexDetail', { pokemon })}
+        />
+        <SectionCard>
+          <View style={styles.discoveryInfo}>
+            <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+              Discovered on {new Date(item.discoveredAt).toLocaleDateString()}
+            </Text>
+            {item.biome && (
+              <Text variant="labelMedium" style={{ color: theme.colors.primary }}>
+                Biome: {item.biome}
+              </Text>
+            )}
+          </View>
+        </SectionCard>
       </View>
     );
   };
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FF0000" />
-        <Text>Loading your collection...</Text>
-      </View>
+      <Screen>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator animating size="large" color={theme.colors.primary} />
+          <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant, marginTop: 12 }}>
+            Loading your collection...
+          </Text>
+        </View>
+      </Screen>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>My Collection</Text>
-      <Text style={styles.subtitle}>
-        {discovered.length} Pokemon discovered
-      </Text>
-
-      {discovered.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No Pokemon discovered yet!</Text>
-          <Text style={styles.emptySubtext}>Go hunting to find Pokemon!</Text>
+    <Screen>
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <Text variant="headlineMedium" style={{ color: theme.colors.onSurface }}>
+            My Collection
+          </Text>
+          <Text variant="bodyLarge" style={{ color: theme.colors.onSurfaceVariant }}>
+            {discovered.length} Pokémon discovered
+          </Text>
         </View>
-      ) : (
-        <FlatList
-          data={discovered}
-          renderItem={renderDiscoveredItem}
-          keyExtractor={(item) => item.id.toString()}
-          numColumns={2}
-          contentContainerStyle={styles.listContainer}
-        />
-      )}
-    </View>
+
+        {discovered.length === 0 ? (
+          <SectionCard title="No Pokémon yet" subtitle="Head out on a hunt to fill your collection">
+            <Text variant="bodyMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+              Capture Pokémon in Hunt mode and they’ll appear here as part of your Pokédex journey.
+            </Text>
+          </SectionCard>
+        ) : (
+          <FlatList
+            data={discovered}
+            renderItem={renderDiscoveredItem}
+            keyExtractor={(item) => item.id.toString()}
+            contentContainerStyle={{ paddingBottom: theme.custom.spacing.xl }}
+            showsVerticalScrollIndicator={false}
+          />
+        )}
+      </View>
+    </Screen>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f0f8ff',
-    padding: 16,
+    gap: 16,
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    color: '#FF0000',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-    color: '#666',
-    marginBottom: 20,
-  },
-  itemContainer: {
-    flex: 1,
-    margin: 8,
-  },
-  discoveryInfo: {
-    backgroundColor: '#fff',
-    padding: 8,
-    borderRadius: 8,
-    marginTop: 4,
-  },
-  discoveryText: {
-    fontSize: 12,
-    color: '#666',
-  },
-  biomeText: {
-    fontSize: 12,
-    color: '#4CAF50',
-    fontWeight: 'bold',
+  header: {
+    gap: 4,
   },
   loadingContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+  cardWrapper: {
+    marginBottom: 12,
   },
-  emptyText: {
-    fontSize: 18,
-    color: '#666',
-    marginBottom: 8,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#999',
-  },
-  listContainer: {
-    paddingBottom: 20,
+  discoveryInfo: {
+    gap: 4,
   },
 });
 

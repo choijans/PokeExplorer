@@ -8,6 +8,7 @@ import com.facebook.react.ReactPackage
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.load
 import com.facebook.react.defaults.DefaultReactNativeHost
 import com.facebook.soloader.SoLoader
+import com.BV.LinearGradient.LinearGradientPackage
 
 class MainApplication : Application(), ReactApplication {
 
@@ -15,7 +16,9 @@ class MainApplication : Application(), ReactApplication {
       object : DefaultReactNativeHost(this) {
         override fun getPackages(): List<ReactPackage> {
           // @react-native-voice/voice is auto-linked by PackageList, no need to add manually
-          return PackageList(this).packages
+          val packages = PackageList(this).packages
+          packages.add(LinearGradientPackage())
+          return packages
         }
 
         override fun getJSMainModuleName(): String = "index"

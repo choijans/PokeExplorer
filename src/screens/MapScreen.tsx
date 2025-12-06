@@ -3,12 +3,14 @@ import { StyleSheet, View, Image, Animated, TouchableOpacity, Text, Dimensions }
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { locationService, PokemonEncounter } from '../services/locationService';
 import { pokeApi } from '../services/pokeApi';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RootStackParamList } from '../navigation/AppNavigator';
 
 const { width, height } = Dimensions.get('window');
 const TILE_SIZE = 256;
 
 export default function MapScreen() {
-  const navigation = useNavigation();
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [location, setLocation] = useState<any>(null);
   const [pokemon, setPokemon] = useState<PokemonEncounter[]>([]);
   const [selectedPokemon, setSelectedPokemon] = useState<PokemonEncounter | null>(null);
@@ -195,7 +197,7 @@ export default function MapScreen() {
       if (distance < 50) {
         try {
           const pokemonData = await pokeApi.getPokemon(selectedPokemon.id);
-          navigation.navigate('ARCapture' as never, { pokemon: pokemonData, biome: selectedPokemon.biome } as never);
+          navigation.navigate('ARCapture', { pokemon: pokemonData, biome: selectedPokemon.biome });
           setPokemon(prev => prev.filter(p => p.id !== selectedPokemon.id));
           setSelectedPokemon(null);
         } catch (error) {

@@ -1,13 +1,23 @@
 import React, { useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 import { RouteProp } from '@react-navigation/native';
-import { pokeApi } from '../services/pokeApi';
+import LinearGradient from 'react-native-linear-gradient';
+import {
+  Button,
+  Chip,
+  ProgressBar,
+  Text,
+  useTheme,
+} from 'react-native-paper';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { LazyImage } from './LazyImage';
 import { imageCacheService } from '../services/imageCache';
 import sharingService from '../services/sharingService';
+import type { PokemonTheme } from '../theme';
+import Screen from './ui/Screen';
+import SectionCard from './ui/SectionCard';
 
-type PokemonDetailRouteProp = RouteProp<RootStackParamList, 'PokedexDetail'>;
+ type PokemonDetailRouteProp = RouteProp<RootStackParamList, 'PokedexDetail'>;
 
 interface PokemonDetailProps {
   route: PokemonDetailRouteProp;
@@ -15,20 +25,19 @@ interface PokemonDetailProps {
 
 const PokemonDetail: React.FC<PokemonDetailProps> = ({ route }) => {
   const { pokemon } = route.params;
+  const theme = useTheme<PokemonTheme>();
 
-  // Preload all sprite variants for smoother viewing
   useEffect(() => {
     const preloadSprites = async () => {
       const sprites = [
         pokemon.sprites.front_default,
         pokemon.sprites.other?.['official-artwork']?.front_default,
       ].filter(Boolean) as string[];
-      
-      // Also preload by ID for different views
+
       await imageCacheService.prefetchPokemonSprites(pokemon.id);
       await imageCacheService.preloadImages(sprites);
     };
-    
+
     preloadSprites();
   }, [pokemon]);
 
@@ -53,13 +62,13 @@ const PokemonDetail: React.FC<PokemonDetailProps> = ({ route }) => {
       steel: '#B8B8D0',
       fairy: '#EE99AC',
     };
-    return colors[type] || '#68A090';
+    return colors[type] || theme.colors.primary;
   };
 
   const getStatColor = (stat: number) => {
-    if (stat >= 100) return '#4CAF50';
-    if (stat >= 70) return '#FFC107';
-    return '#F44336';
+    if (stat >= 100) return theme.colors.primary;
+    if (stat >= 70) return theme.colors.secondary;
+    return theme.colors.error;
   };
 
   const handleShare = async () => {
@@ -81,215 +90,159 @@ const PokemonDetail: React.FC<PokemonDetailProps> = ({ route }) => {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <LazyImage
-          source={{ uri: pokemon.sprites.other?.['official-artwork']?.front_default || pokemon.sprites.front_default }}
-          style={styles.mainImage}
-          resizeMode="contain"
-          showLoading={true}
-          loadingSize="large"
-          fadeInDuration={400}
-        />
-        <Text style={styles.name}>{pokemon.name.charAt(0).toUpperCase() + pokemon.name.slice(1)}</Text>
-        <Text style={styles.id}>#{pokemon.id.toString().padStart(3, '0')}</Text>
-        <View style={styles.types}>
-          {pokemon.types.map((typeInfo, index) => (
-            <View
-              key={index}
-              style={[styles.typeBadge, { backgroundColor: getTypeColor(typeInfo.type.name) }]}
-            >
-              <Text style={styles.typeText}>{typeInfo.type.name.toUpperCase()}</Text>
+    <Screen scrollable>
+      <View style={{ gap: theme.custom.spacing.lg }}>
+        <LinearGradient
+          colors={theme.custom.gradients.card}
+          style={[styles.hero, { borderRadius: theme.custom.radius.lg }]}
+        >
+          <View style={styles.heroContent}>
+            <LazyImage
+              source={{
+                uri: pokemon.sprites.other?.['official-artwork']?.front_default ||
+                  pokemon.sprites.front_default,
+              }}
+              style={styles.mainImage}
+              resizeMode="contain"
+              showLoading
+              loadingSize="large"
+              fadeInDuration={400}
+            />
+            <View style={styles.heroText}>
+              <Text variant="headlineMedium" style={{ color: theme.colors.onSurface, textTransform: 'capitalize' }}>
+                {pokemon.name}
+              </Text>
+              <Text variant="titleMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+                #{pokemon.id.toString().padStart(3, '0')}
+              </Text>
+              <View style={styles.typeRow}>
+                {pokemon.types.map((typeInfo, index) => (
+                  <Chip
+                    key={index}
+                    compact
+                    textStyle={styles.typeText}
+                    style={[styles.typeChip, { backgroundColor: getTypeColor(typeInfo.type.name) }]}
+                  >
+                    {typeInfo.type.name.toUpperCase()}
+                  </Chip>
+                ))}
+              </View>
+              <Button
+                mode="contained"
+                icon="share-variant"
+                onPress={handleShare}
+                style={styles.shareButton}
+              >
+                Share Pokémon
+              </Button>
             </View>
-          ))}
-        </View>
-        <TouchableOpacity style={styles.shareButton} onPress={handleShare}>
-          <Text style={styles.shareButtonText}>📤 Share</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Basic Info</Text>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Height:</Text>
-          <Text style={styles.infoValue}>{pokemon.height / 10} m</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Weight:</Text>
-          <Text style={styles.infoValue}>{pokemon.weight / 10} kg</Text>
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Abilities</Text>
-        {pokemon.abilities.map((ability, index) => (
-          <Text key={index} style={styles.ability}>
-            {ability.ability.name.charAt(0).toUpperCase() + ability.ability.name.slice(1)}
-          </Text>
-        ))}
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Base Stats</Text>
-        {pokemon.stats.map((stat, index) => (
-          <View key={index} style={styles.statRow}>
-            <Text style={styles.statName}>{stat.stat.name.charAt(0).toUpperCase() + stat.stat.name.slice(1)}</Text>
-            <View style={styles.statBar}>
-              <View
-                style={[
-                  styles.statFill,
-                  {
-                    width: `${(stat.base_stat / 255) * 100}%`,
-                    backgroundColor: getStatColor(stat.base_stat),
-                  },
-                ]}
-              />
-            </View>
-            <Text style={styles.statValue}>{stat.base_stat}</Text>
           </View>
-        ))}
+        </LinearGradient>
+
+        <SectionCard title="Basic Info">
+          <View style={styles.infoGrid}>
+            <View style={styles.infoItem}>
+              <Text variant="labelLarge" style={{ color: theme.colors.onSurfaceVariant }}>
+                Height
+              </Text>
+              <Text variant="titleMedium" style={{ color: theme.colors.onSurface }}>
+                {pokemon.height / 10} m
+              </Text>
+            </View>
+            <View style={styles.infoItem}>
+              <Text variant="labelLarge" style={{ color: theme.colors.onSurfaceVariant }}>
+                Weight
+              </Text>
+              <Text variant="titleMedium" style={{ color: theme.colors.onSurface }}>
+                {pokemon.weight / 10} kg
+              </Text>
+            </View>
+          </View>
+        </SectionCard>
+
+        <SectionCard title="Abilities">
+          <View style={{ gap: theme.custom.spacing.xs }}>
+            {pokemon.abilities.map((ability, index) => (
+              <Text key={index} variant="bodyLarge" style={{ color: theme.colors.onSurface }}>
+                • {ability.ability.name.charAt(0).toUpperCase() + ability.ability.name.slice(1)}
+              </Text>
+            ))}
+          </View>
+        </SectionCard>
+
+        <SectionCard title="Base Stats">
+          <View style={{ gap: theme.custom.spacing.sm }}>
+            {pokemon.stats.map((stat, index) => (
+              <View key={index} style={styles.statRow}>
+                <View style={styles.statLabel}>
+                  <Text variant="bodyMedium" style={{ color: theme.colors.onSurface }}>
+                    {stat.stat.name.charAt(0).toUpperCase() + stat.stat.name.slice(1)}
+                  </Text>
+                  <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+                    {stat.base_stat}
+                  </Text>
+                </View>
+                <ProgressBar
+                  progress={Math.min(stat.base_stat / 255, 1)}
+                  color={getStatColor(stat.base_stat)}
+                  style={{ borderRadius: theme.custom.radius.sm }}
+                />
+              </View>
+            ))}
+          </View>
+        </SectionCard>
       </View>
-    </ScrollView>
+    </Screen>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  header: {
-    backgroundColor: '#fff',
+  hero: {
     padding: 20,
+  },
+  heroContent: {
+    flexDirection: 'row',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
+    gap: 24,
   },
   mainImage: {
-    width: 200,
-    height: 200,
-    marginBottom: 16,
+    width: 180,
+    height: 180,
   },
-  name: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
+  heroText: {
+    flex: 1,
+    gap: 12,
   },
-  id: {
-    fontSize: 18,
-    color: '#666',
-    marginBottom: 16,
-  },
-  types: {
+  typeRow: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
   },
-  typeBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    marginHorizontal: 4,
+  typeChip: {
+    height: 28,
   },
   typeText: {
     color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '700',
+    letterSpacing: 0.5,
   },
   shareButton: {
-    marginTop: 16,
-    backgroundColor: '#2c5aa0',
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 24,
+    alignSelf: 'flex-start',
+  },
+  infoGrid: {
     flexDirection: 'row',
-    alignItems: 'center',
+    gap: 24,
   },
-  shareButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  section: {
-    backgroundColor: '#fff',
-    margin: 8,
-    padding: 16,
-    borderRadius: 8,
-  },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 12,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  infoLabel: {
-    fontSize: 16,
-    color: '#666',
-  },
-  infoValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  ability: {
-    fontSize: 16,
-    color: '#333',
-    marginBottom: 4,
+  infoItem: {
+    flex: 1,
   },
   statRow: {
+    gap: 12,
+  },
+  statLabel: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
-  },
-  statName: {
-    width: 80,
-    fontSize: 14,
-    color: '#666',
-  },
-  statBar: {
-    flex: 1,
-    height: 8,
-    backgroundColor: '#ddd',
-    borderRadius: 4,
-    marginHorizontal: 8,
-  },
-  statFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  statValue: {
-    width: 30,
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#333',
-    textAlign: 'right',
-  },
-  flavorText: {
-    fontSize: 16,
-    color: '#333',
-    lineHeight: 24,
-  },
-  evolutionContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-  },
-  evolutionText: {
-    fontSize: 16,
-    color: '#333',
-    marginHorizontal: 4,
-  },
-  arrow: {
-    fontSize: 18,
-    color: '#666',
-    marginHorizontal: 8,
-  },
-  loader: {
-    margin: 20,
   },
 });
 

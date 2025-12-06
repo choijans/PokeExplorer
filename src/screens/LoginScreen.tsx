@@ -1,20 +1,23 @@
 import React, { useState } from 'react';
+import { Alert, StyleSheet, View } from 'react-native';
+import { useAuth } from '../contexts/AuthContext';
+import Screen from '../components/ui/Screen';
+import SectionCard from '../components/ui/SectionCard';
 import {
-  View,
+  Button,
+  HelperText,
   Text,
   TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
-import { useAuth } from '../contexts/AuthContext';
+  useTheme,
+} from 'react-native-paper';
+import type { PokemonTheme } from '../theme';
 
 const LoginScreen: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const { signInWithEmail, signUpWithEmail } = useAuth();
+  const theme = useTheme<PokemonTheme>();
 
   const handleEmailLogin = async () => {
     if (!email || !password) {
@@ -47,30 +50,63 @@ const LoginScreen: React.FC = () => {
   };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>PokeExplorer</Text>
-      <TextInput
-        style={styles.input}
-        placeholder="Email"
-        value={email}
-        onChangeText={setEmail}
-        keyboardType="email-address"
-        autoCapitalize="none"
-      />
-      <TextInput
-        style={styles.input}
-        placeholder="Password"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-      />
-      <TouchableOpacity style={styles.button} onPress={handleEmailLogin} disabled={loading}>
-        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Login</Text>}
-      </TouchableOpacity>
-      <TouchableOpacity style={styles.button} onPress={handleEmailSignUp} disabled={loading}>
-        {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Sign Up</Text>}
-      </TouchableOpacity>
-    </View>
+    <Screen>
+      <View style={styles.container}>
+        <Text variant="headlineMedium" style={{ color: theme.colors.onSurface }}>
+          PokeExplorer
+        </Text>
+        <Text
+          variant="bodyLarge"
+          style={{ color: theme.colors.onSurfaceVariant }}
+        >
+          Sign in to sync your hunts, Pokémon collection, and community posts.
+        </Text>
+
+        <SectionCard>
+          <View style={styles.form}>
+            <TextInput
+              mode="outlined"
+              label="Email"
+              value={email}
+              onChangeText={setEmail}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoComplete="email"
+            />
+            <TextInput
+              mode="outlined"
+              label="Password"
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry
+            />
+            <HelperText
+              type="info"
+              visible
+              style={{ color: theme.colors.onSurfaceVariant }}
+            >
+              Tip: Make sure to use the same account across devices to keep your
+              Pokédex in sync.
+            </HelperText>
+            <Button
+              mode="contained"
+              onPress={handleEmailLogin}
+              loading={loading}
+              style={styles.button}
+            >
+              Login
+            </Button>
+            <Button
+              mode="outlined"
+              onPress={handleEmailSignUp}
+              loading={loading}
+            >
+              Create an Account
+            </Button>
+          </View>
+        </SectionCard>
+      </View>
+    </Screen>
   );
 };
 
@@ -78,36 +114,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'center',
-    padding: 20,
-    backgroundColor: '#f5f5f5',
+    gap: 16,
   },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 40,
-    color: '#333',
-  },
-  input: {
-    height: 50,
-    borderColor: '#ddd',
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 15,
-    marginBottom: 15,
-    backgroundColor: '#fff',
+  form: {
+    gap: 12,
   },
   button: {
-    backgroundColor: '#007bff',
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+    marginTop: 8,
   },
 });
 

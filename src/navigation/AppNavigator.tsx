@@ -5,6 +5,9 @@ import LoginScreen from '../screens/LoginScreen';
 import BottomTabNavigator from './BottomTabNavigator';
 import PokemonDetail from '../components/PokemonDetail';
 import { Pokemon } from '../services/pokeApi';
+import { ActivityIndicator, useTheme } from 'react-native-paper';
+import { View, StyleSheet } from 'react-native';
+import type { PokemonTheme } from '../theme';
 
 export type RootStackParamList = {
   Main: undefined;
@@ -17,13 +20,28 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const AppNavigator: React.FC = () => {
   const { user, loading } = useAuth();
+  const theme = useTheme<PokemonTheme>();
 
   if (loading) {
-    return null;
+    return (
+      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
+        <ActivityIndicator animating size="large" color={theme.colors.primary} />
+      </View>
+    );
   }
 
   return (
-    <Stack.Navigator>
+    <Stack.Navigator
+      screenOptions={{
+        headerStyle: { backgroundColor: theme.colors.surface },
+        headerTitleStyle: {
+          color: theme.colors.onSurface,
+          fontWeight: '700',
+        },
+        headerTintColor: theme.colors.onSurface,
+        contentStyle: { backgroundColor: theme.colors.background },
+      }}
+    >
       {user ? (
         <>
           <Stack.Screen name="Main" component={BottomTabNavigator} options={{ headerShown: false }} />
@@ -34,8 +52,8 @@ const AppNavigator: React.FC = () => {
               title: route.params?.pokemon?.name
                 ? route.params.pokemon.name.charAt(0).toUpperCase() + route.params.pokemon.name.slice(1)
                 : 'Pokemon Detail',
-              headerStyle: { backgroundColor: '#FF0000' },
-              headerTintColor: '#fff',
+              headerStyle: { backgroundColor: theme.colors.primary },
+              headerTintColor: theme.colors.onPrimary,
             })}
           />
           <Stack.Screen
@@ -50,5 +68,13 @@ const AppNavigator: React.FC = () => {
     </Stack.Navigator>
   );
 };
+
+const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+});
 
 export default AppNavigator;

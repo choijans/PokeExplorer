@@ -118,7 +118,7 @@ const ARCaptureScreen: React.FC = () => {
           <Text style={styles.biomeText}>{biomeConfig.icon} {biome.toUpperCase()} BIOME</Text>
         </View>
 
-        {biomeConfig.particles.map((particle, i) => (
+  {biomeConfig.particles.map((particle: BiomeParticle, i: number) => (
           <Animated.View
             key={i}
             style={[
@@ -187,47 +187,51 @@ const ARCaptureScreen: React.FC = () => {
   );
 };
 
-const getBiomeConfig = (biome: string) => {
-  const configs: any = {
+type BiomeParticle = {
+  x: number;
+  y: number;
+  emoji: string;
+};
+
+type BiomeConfig = {
+  filterColor: string;
+  overlayColor: string;
+  icon: string;
+  particles: BiomeParticle[];
+};
+
+const createParticles = (count: number, emojiSet: string[]): BiomeParticle[] =>
+  Array.from({ length: count }, () => ({
+    x: Math.random() * width,
+    y: Math.random() * height * 0.6,
+    emoji: emojiSet[Math.floor(Math.random() * emojiSet.length)],
+  }));
+
+const getBiomeConfig = (biome: string): BiomeConfig => {
+  const configs: Record<string, BiomeConfig> = {
     water: {
       filterColor: 'rgba(30, 144, 255, 0.15)',
       overlayColor: 'rgba(30, 144, 255, 0.8)',
       icon: '💧',
-      particles: Array.from({ length: 8 }, (_, i) => ({
-        x: Math.random() * width,
-        y: Math.random() * height * 0.6,
-        emoji: ['💧', '🌊', '💦'][Math.floor(Math.random() * 3)],
-      })),
+      particles: createParticles(8, ['💧', '🌊', '💦']),
     },
     grass: {
       filterColor: 'rgba(34, 139, 34, 0.15)',
       overlayColor: 'rgba(34, 139, 34, 0.8)',
       icon: '🌿',
-      particles: Array.from({ length: 10 }, (_, i) => ({
-        x: Math.random() * width,
-        y: Math.random() * height * 0.6,
-        emoji: ['🌿', '🍃', '🌱'][Math.floor(Math.random() * 3)],
-      })),
+      particles: createParticles(10, ['🌿', '🍃', '🌱']),
     },
     urban: {
       filterColor: 'rgba(105, 105, 105, 0.15)',
       overlayColor: 'rgba(105, 105, 105, 0.8)',
       icon: '🏙️',
-      particles: Array.from({ length: 6 }, (_, i) => ({
-        x: Math.random() * width,
-        y: Math.random() * height * 0.6,
-        emoji: ['⚡', '🌃', '🏢'][Math.floor(Math.random() * 3)],
-      })),
+      particles: createParticles(6, ['⚡', '🌃', '🏢']),
     },
     normal: {
       filterColor: 'rgba(255, 215, 0, 0.1)',
       overlayColor: 'rgba(255, 215, 0, 0.8)',
       icon: '☀️',
-      particles: Array.from({ length: 8 }, (_, i) => ({
-        x: Math.random() * width,
-        y: Math.random() * height * 0.6,
-        emoji: ['✨', '⭐', '🌟'][Math.floor(Math.random() * 3)],
-      })),
+      particles: createParticles(8, ['✨', '⭐', '🌟']),
     },
   };
   return configs[biome] || configs.normal;
