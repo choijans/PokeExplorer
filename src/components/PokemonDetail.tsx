@@ -1,7 +1,6 @@
-import React, { useEffect } from 'react';
-import { View, StyleSheet } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { RouteProp } from '@react-navigation/native';
-import LinearGradient from 'react-native-linear-gradient';
 import {
   Button,
   Chip,
@@ -28,19 +27,41 @@ const PokemonDetail: React.FC<PokemonDetailProps> = ({ route }) => {
   const { pokemon } = route.params;
   const theme = useTheme<PokemonTheme>();
 
+  const [showAnimated, setShowAnimated] = useState(false);
+
+  const staticImage = useMemo(
+    () =>
+      pokemon.sprites.other?.['official-artwork']?.front_default ??
+      pokemon.sprites.front_default,
+    [pokemon],
+  );
+
+  const animatedImage = useMemo(() => {
+    const spriteVersions = (pokemon as any).sprites?.versions;
+    return (
+      spriteVersions?.['generation-v']?.['black-white']?.animated?.front_default ?? null
+    );
+  }, [pokemon]);
+
+  const canToggleImage = Boolean(animatedImage);
+  const currentImage = canToggleImage && showAnimated && animatedImage ? animatedImage : staticImage;
+
+  useEffect(() => {
+    setShowAnimated(false);
+  }, [pokemon.id]);
+
   useEffect(() => {
     const preloadSprites = async () => {
-      const sprites = [
-        pokemon.sprites.front_default,
-        pokemon.sprites.other?.['official-artwork']?.front_default,
-      ].filter(Boolean) as string[];
-
       await imageCacheService.prefetchPokemonSprites(pokemon.id);
-      await imageCacheService.preloadImages(sprites);
+
+      const sprites = [staticImage, animatedImage].filter(Boolean) as string[];
+      if (sprites.length > 0) {
+        await imageCacheService.preloadImages(sprites);
+      }
     };
 
     preloadSprites();
-  }, [pokemon]);
+  }, [pokemon, staticImage, animatedImage]);
 
   const getTypeColor = (type: string) => {
     const colors: { [key: string]: string } = {
@@ -90,88 +111,159 @@ const PokemonDetail: React.FC<PokemonDetailProps> = ({ route }) => {
     await sharingService.sharePokemonDetails(shareData);
   };
 
+  const toggleImageMode = () => {
+    if (!canToggleImage) {
+      return;
+    }
+
+    setShowAnimated((prev) => !prev);
+  };
+
   return (
     <Screen scrollable>
       <View style={{ gap: theme.custom.spacing.lg }}>
-        <LinearGradient
-          colors={theme.custom.gradients.card}
-          style={[styles.hero, { borderRadius: theme.custom.radius.lg }]}
+        <View
+          style={[
+            styles.hero,
+            {
+              borderRadius: theme.custom.radius.lg,
+              backgroundColor: theme.colors.surface,
+              shadowColor: theme.colors.outlineVariant,
+            },
+          ]}
         >
-          <View style={styles.heroContent}>
+          <TouchableOpacity
+            activeOpacity={canToggleImage ? 0.85 : 1}
+            onPress={toggleImageMode}
+            disabled={!canToggleImage}
+            style={[
+              styles.imageContainer,
+              {
+                backgroundColor: theme.colors.surfaceVariant,
+                borderRadius: theme.custom.radius.lg,
+              },
+            ]}
+          >
             <LazyImage
-              source={{
-                uri: pokemon.sprites.other?.['official-artwork']?.front_default ||
-                  pokemon.sprites.front_default,
-              }}
+              key={showAnimated && canToggleImage ? 'animated' : 'static'}
+              source={{ uri: currentImage }}
               style={styles.mainImage}
               resizeMode="contain"
               showLoading
               loadingSize="large"
-              fadeInDuration={400}
+              fadeInDuration={300}
             />
-            <View style={styles.heroText}>
-              <Text variant="headlineMedium" style={{ color: theme.colors.onSurface, textTransform: 'capitalize' }}>
-                {pokemon.name}
-              </Text>
-              <Text variant="titleMedium" style={{ color: theme.colors.onSurfaceVariant }}>
-                #{pokemon.id.toString().padStart(3, '0')}
-              </Text>
-              <View style={styles.typeRow}>
-                {pokemon.types.map((typeInfo, index) => (
-                  <Chip
-                    key={index}
-                    textStyle={styles.typeText}
-                    style={[chipStyles.base, { backgroundColor: getTypeColor(typeInfo.type.name) }]}
-                  >
-                    {typeInfo.type.name.toUpperCase()}
-                  </Chip>
-                ))}
-              </View>
-              <Button
-                mode="contained"
-                icon="share-variant"
-                onPress={handleShare}
-                style={styles.shareButton}
+            {canToggleImage && (
+              <View
+                style={[
+                  styles.imageBadge,
+                  {
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.outlineVariant,
+                  },
+                ]}
               >
-                Share Pokémon
-              </Button>
-            </View>
-          </View>
-        </LinearGradient>
+                <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                  {showAnimated ? 'Animated sprite' : 'Official artwork'}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
 
-        <SectionCard title="Basic Info">
-          <View style={styles.infoGrid}>
-            <View style={styles.infoItem}>
-              <Text variant="labelLarge" style={{ color: theme.colors.onSurfaceVariant }}>
+          <View style={styles.heroMeta}>
+            <Text
+              variant="headlineMedium"
+              style={{
+                color: theme.colors.onSurface,
+                textTransform: 'capitalize',
+                textAlign: 'center',
+              }}
+            >
+              {pokemon.name}
+            </Text>
+            <Text variant="titleMedium" style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center' }}>
+              #{pokemon.id.toString().padStart(3, '0')}
+            </Text>
+          </View>
+
+          <View style={styles.typeRow}>
+            {pokemon.types.map((typeInfo, index) => (
+              <Chip
+                key={index}
+                textStyle={styles.typeText}
+                style={[chipStyles.base, { backgroundColor: getTypeColor(typeInfo.type.name) }]}
+              >
+                {typeInfo.type.name.toUpperCase()}
+              </Chip>
+            ))}
+          </View>
+
+          <View style={styles.metricRow}>
+            <View
+              style={[styles.metricCard, { backgroundColor: theme.colors.surfaceVariant }]}
+            >
+              <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>
                 Height
               </Text>
               <Text variant="titleMedium" style={{ color: theme.colors.onSurface }}>
-                {pokemon.height / 10} m
+                {(pokemon.height / 10).toFixed(1)} m
               </Text>
             </View>
-            <View style={styles.infoItem}>
-              <Text variant="labelLarge" style={{ color: theme.colors.onSurfaceVariant }}>
+            <View
+              style={[styles.metricCard, { backgroundColor: theme.colors.surfaceVariant }]}
+            >
+              <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>
                 Weight
               </Text>
               <Text variant="titleMedium" style={{ color: theme.colors.onSurface }}>
-                {pokemon.weight / 10} kg
+                {(pokemon.weight / 10).toFixed(1)} kg
               </Text>
             </View>
           </View>
-        </SectionCard>
 
-        <SectionCard title="Abilities">
-          <View style={{ gap: theme.custom.spacing.xs }}>
+          {canToggleImage && (
+            <Text
+              variant="labelSmall"
+              style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center' }}
+            >
+              Tap the image to switch to {showAnimated ? 'official artwork' : 'animated sprite'}.
+            </Text>
+          )}
+
+          <Button
+            mode="contained-tonal"
+            icon="share-variant"
+            onPress={handleShare}
+            style={styles.shareButton}
+          >
+            Share Pokémon
+          </Button>
+        </View>
+
+        <SectionCard
+          title="Abilities"
+          style={[styles.section, { backgroundColor: theme.colors.surface }]}
+          contentStyle={styles.sectionContent}
+        >
+          <View style={styles.abilityList}>
             {pokemon.abilities.map((ability, index) => (
-              <Text key={index} variant="bodyLarge" style={{ color: theme.colors.onSurface }}>
-                • {ability.ability.name.charAt(0).toUpperCase() + ability.ability.name.slice(1)}
-              </Text>
+              <Chip
+                key={index}
+                style={[chipStyles.base, { backgroundColor: theme.colors.surfaceVariant }]}
+                textStyle={{ color: theme.colors.onSurface }}
+              >
+                {ability.ability.name.charAt(0).toUpperCase() + ability.ability.name.slice(1)}
+              </Chip>
             ))}
           </View>
         </SectionCard>
 
-        <SectionCard title="Base Stats">
-          <View style={{ gap: theme.custom.spacing.sm }}>
+        <SectionCard
+          title="Base Stats"
+          style={[styles.section, { backgroundColor: theme.colors.surface }]}
+          contentStyle={styles.sectionContent}
+        >
+          <View style={styles.statList}>
             {pokemon.stats.map((stat, index) => (
               <View key={index} style={styles.statRow}>
                 <View style={styles.statLabel}>
@@ -185,7 +277,7 @@ const PokemonDetail: React.FC<PokemonDetailProps> = ({ route }) => {
                 <ProgressBar
                   progress={Math.min(stat.base_stat / 255, 1)}
                   color={getStatColor(stat.base_stat)}
-                  style={{ borderRadius: theme.custom.radius.sm }}
+                  style={{ borderRadius: theme.custom.radius.sm, height: 6 }}
                 />
               </View>
             ))}
@@ -198,25 +290,37 @@ const PokemonDetail: React.FC<PokemonDetailProps> = ({ route }) => {
 
 const styles = StyleSheet.create({
   hero: {
-    padding: 20,
+    padding: 24,
+    gap: 20,
   },
-  heroContent: {
-    flexDirection: 'row',
+  imageContainer: {
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 24,
+    padding: 16,
+    position: 'relative',
+    overflow: 'hidden',
   },
   mainImage: {
-    width: 180,
-    height: 180,
+    width: 220,
+    height: 220,
   },
-  heroText: {
-    flex: 1,
-    gap: 12,
+  imageBadge: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
+    borderRadius: 999,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  heroMeta: {
+    gap: 4,
   },
   typeRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
+    justifyContent: 'center',
   },
   typeText: {
     color: '#fff',
@@ -224,18 +328,39 @@ const styles = StyleSheet.create({
     letterSpacing: 0.5,
     lineHeight: 16,
   },
-  shareButton: {
-    alignSelf: 'flex-start',
-  },
-  infoGrid: {
+  metricRow: {
     flexDirection: 'row',
-    gap: 24,
+    justifyContent: 'center',
+    gap: 12,
   },
-  infoItem: {
-    flex: 1,
+  metricCard: {
+    minWidth: 120,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    gap: 4,
+  },
+  shareButton: {
+    alignSelf: 'center',
+  },
+  section: {
+    borderRadius: 20,
+  },
+  sectionContent: {
+    gap: 12,
+    paddingVertical: 16,
+  },
+  abilityList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  statList: {
+    gap: 16,
   },
   statRow: {
-    gap: 12,
+    gap: 8,
   },
   statLabel: {
     flexDirection: 'row',

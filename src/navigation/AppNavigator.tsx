@@ -48,13 +48,13 @@ const AppNavigator: React.FC = () => {
           <Stack.Screen
             name="PokedexDetail"
             component={PokemonDetail}
-            options={({ route }) => ({
-              title: route.params?.pokemon?.name
-                ? route.params.pokemon.name.charAt(0).toUpperCase() + route.params.pokemon.name.slice(1)
-                : 'Pokemon Detail',
-              headerStyle: { backgroundColor: theme.colors.primary },
-              headerTintColor: theme.colors.onPrimary,
-            })}
+            options={{
+              headerTitle: '',
+              headerStyle: { backgroundColor: theme.colors.background },
+              headerShadowVisible: false,
+              headerBackTitleVisible: false,
+              headerTintColor: theme.colors.onSurface,
+            }}
           />
           <Stack.Screen
             name="ARCapture"
