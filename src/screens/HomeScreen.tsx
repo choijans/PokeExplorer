@@ -13,7 +13,7 @@ import type { TabParamList } from '../navigation/BottomTabNavigator';
 const HomeScreen: React.FC = () => {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const theme = useTheme<PokemonTheme>();
-
+// test
   return (
     <Screen>
       <View style={styles.container}>
