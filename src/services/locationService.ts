@@ -1,6 +1,5 @@
-import Geolocation from 'react-native-geolocation-service';
-import { PermissionsAndroid, Platform, Alert } from 'react-native';
-import { check, request, PERMISSIONS, RESULTS } from 'react-native-permissions';
+import { Platform, PermissionsAndroid } from 'react-native';
+import Geolocation from '@react-native-community/geolocation';
 
 export interface Location {
   latitude: number;
@@ -19,25 +18,16 @@ class LocationService {
   private currentLocation: Location | null = null;
 
   async requestLocationPermission(): Promise<boolean> {
+    if (Platform.OS === 'ios') {
+      return true;
+    }
+    
     try {
-      if (Platform.OS === 'ios') {
-        const result = await request(PERMISSIONS.IOS.LOCATION_WHEN_IN_USE);
-        return result === RESULTS.GRANTED;
-      } else {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-          {
-            title: 'Location Permission',
-            message: 'PokeExplorer needs access to your location to find Pokemon nearby.',
-            buttonNeutral: 'Ask Me Later',
-            buttonNegative: 'Cancel',
-            buttonPositive: 'OK',
-          }
-        );
-        return granted === PermissionsAndroid.RESULTS.GRANTED;
-      }
-    } catch (error) {
-      console.error('Permission request error:', error);
+      const granted = await PermissionsAndroid.request(
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
+      );
+      return granted === PermissionsAndroid.RESULTS.GRANTED;
+    } catch (err) {
       return false;
     }
   }
@@ -53,13 +43,27 @@ class LocationService {
           this.currentLocation = location;
           resolve(location);
         },
-        (error) => {
-          console.error('Location error:', error);
-          reject(error);
-        },
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 10000 }
+        (error) => reject(error),
+        { enableHighAccuracy: false, timeout: 30000, maximumAge: 10000 }
       );
     });
+  }
+
+  async watchLocation(callback: (location: Location) => void): Promise<any> {
+    const watchId = Geolocation.watchPosition(
+      (position) => {
+        const location = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        };
+        this.currentLocation = location;
+        callback(location);
+      },
+      (error) => console.error('Location watch error:', error),
+      { enableHighAccuracy: true, distanceFilter: 5, interval: 1000, fastestInterval: 500 }
+    );
+    
+    return { remove: () => Geolocation.clearWatch(watchId) };
   }
 
   getBiomeFromLocation(location: Location): string {

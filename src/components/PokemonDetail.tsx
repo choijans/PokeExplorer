@@ -1,8 +1,10 @@
-import React from 'react';
-import { View, Text, Image, ScrollView, StyleSheet } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, ScrollView, StyleSheet } from 'react-native';
 import { RouteProp } from '@react-navigation/native';
 import { pokeApi } from '../services/pokeApi';
 import { RootStackParamList } from '../navigation/AppNavigator';
+import { LazyImage } from './LazyImage';
+import { imageCacheService } from '../services/imageCache';
 
 type PokemonDetailRouteProp = RouteProp<RootStackParamList, 'PokedexDetail'>;
 
@@ -12,6 +14,22 @@ interface PokemonDetailProps {
 
 const PokemonDetail: React.FC<PokemonDetailProps> = ({ route }) => {
   const { pokemon } = route.params;
+
+  // Preload all sprite variants for smoother viewing
+  useEffect(() => {
+    const preloadSprites = async () => {
+      const sprites = [
+        pokemon.sprites.front_default,
+        pokemon.sprites.other?.['official-artwork']?.front_default,
+      ].filter(Boolean) as string[];
+      
+      // Also preload by ID for different views
+      await imageCacheService.prefetchPokemonSprites(pokemon.id);
+      await imageCacheService.preloadImages(sprites);
+    };
+    
+    preloadSprites();
+  }, [pokemon]);
 
   const getTypeColor = (type: string) => {
     const colors: { [key: string]: string } = {
@@ -46,10 +64,13 @@ const PokemonDetail: React.FC<PokemonDetailProps> = ({ route }) => {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
-        <Image
+        <LazyImage
           source={{ uri: pokemon.sprites.other?.['official-artwork']?.front_default || pokemon.sprites.front_default }}
           style={styles.mainImage}
           resizeMode="contain"
+          showLoading={true}
+          loadingSize="large"
+          fadeInDuration={400}
         />
         <Text style={styles.name}>{pokemon.name.charAt(0).toUpperCase() + pokemon.name.slice(1)}</Text>
         <Text style={styles.id}>#{pokemon.id.toString().padStart(3, '0')}</Text>

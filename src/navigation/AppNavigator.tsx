@@ -10,6 +10,7 @@ export type RootStackParamList = {
   Main: undefined;
   Login: undefined;
   PokedexDetail: { pokemon: Pokemon };
+  ARCapture: { pokemon: Pokemon; biome: string };
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -36,6 +37,11 @@ const AppNavigator: React.FC = () => {
               headerStyle: { backgroundColor: '#FF0000' },
               headerTintColor: '#fff',
             })}
+          />
+          <Stack.Screen
+            name="ARCapture"
+            component={require('../screens/ARCaptureScreen').default}
+            options={{ headerShown: false }}
           />
         </>
       ) : (

@@ -51,8 +51,6 @@ react {
     //   The list of flags to pass to the Hermes compiler. By default is "-O", "-output-source-map"
     // hermesFlags = ["-O", "-output-source-map"]
 
-    /* Autolinking */
-    autolinkLibrariesWithApp()
 }
 
 /**
@@ -85,6 +83,19 @@ android {
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
         versionName "1.0"
+        manifestPlaceholders = [usesCleartextTraffic: "true"]
+        buildConfigField "boolean", "IS_NEW_ARCHITECTURE_ENABLED", "false"
+        buildConfigField "boolean", "IS_HERMES_ENABLED", "true"
+        ndk {
+            abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
+        }
+    }
+    
+    splits {
+        abi {
+            reset()
+            enable false
+        }
     }
     signingConfigs {
         debug {
@@ -97,6 +108,9 @@ android {
     buildTypes {
         debug {
             signingConfig signingConfigs.debug
+            buildFeatures {
+                buildConfig true
+            }
         }
         release {
             // Caution! In production, you need to generate your own keystore file.
@@ -108,6 +122,8 @@ android {
     }
 }
 
+apply from: file("../../node_modules/@react-native-community/cli-platform-android/native_modules.gradle"); applyNativeModulesAppBuildGradle(project)
+
 dependencies {
     // The version of react-native is set by the React Native Gradle Plugin
     implementation("com.facebook.react:react-android")
@@ -118,7 +134,8 @@ dependencies {
         implementation jscFlavor
     }
 
-    // React Native Maps dependencies
-    implementation 'com.google.android.gms:play-services-maps:18.2.0'
+    implementation 'com.google.android.gms:play-services-base:18.5.0'
+    implementation 'com.google.android.gms:play-services-maps:19.0.0'
     implementation 'com.google.android.gms:play-services-location:21.3.0'
+    implementation platform('com.google.firebase:firebase-bom:33.7.0')
 }

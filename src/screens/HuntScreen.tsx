@@ -4,55 +4,107 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
-  Platform,
+  ScrollView,
+  Dimensions,
 } from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { WebView } from 'react-native-webview';
+import { useNavigation } from '@react-navigation/native';
 import { locationService, Location, PokemonEncounter } from '../services/locationService';
 import { pokeApi, Pokemon } from '../services/pokeApi';
 import { discoveryService } from '../services/discoveryService';
+import { LazyImage } from '../components/LazyImage';
+import { imageCacheService } from '../services/imageCache';
+
+const { width } = Dimensions.get('window');
 
 const HuntScreen: React.FC = () => {
+  const navigation = useNavigation();
   const [location, setLocation] = useState<Location | null>(null);
   const [encounters, setEncounters] = useState<PokemonEncounter[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [pokemonData, setPokemonData] = useState<{ [key: number]: Pokemon }>({});
+  const [error, setError] = useState<string | null>(null);
+  const [showMap, setShowMap] = useState(true);
+  const [locationWatcher, setLocationWatcher] = useState<any>(null);
 
   useEffect(() => {
-    initializeHunt();
+    const init = async () => {
+      try {
+        await initializeHunt();
+        const watcher = await locationService.watchLocation((newLocation) => {
+          setLocation(newLocation);
+        });
+        setLocationWatcher(watcher);
+      } catch (error) {
+        console.error('Hunt initialization failed:', error);
+      }
+    };
+    init();
+    
+    return () => {
+      if (locationWatcher) {
+        locationWatcher.remove();
+      }
+    };
   }, []);
+
+  useEffect(() => {
+    const checkDiscovered = async () => {
+      const discovered = await discoveryService.getDiscoveredPokemon();
+      const discoveredIds = discovered.map(p => p.id);
+      setEncounters(prev => 
+        prev.map(enc => ({
+          ...enc,
+          discovered: discoveredIds.includes(enc.id)
+        }))
+      );
+    };
+    
+    const unsubscribe = navigation.addListener('focus', checkDiscovered);
+    return unsubscribe;
+  }, [navigation]);
 
   const initializeHunt = async () => {
     setLoading(true);
+    setError(null);
     try {
       const hasPermission = await locationService.requestLocationPermission();
       if (!hasPermission) {
-        Alert.alert('Permission Required', 'Location permission is required to hunt Pokemon.');
+        setError('Location permission required');
         setLoading(false);
         return;
       }
 
       const currentLocation = await locationService.getCurrentLocation();
-      setLocation(currentLocation);
-
       const newEncounters = locationService.generatePokemonEncounters(currentLocation);
-      setEncounters(newEncounters);
-
-      // Load Pokemon data for encounters
+      
       const pokemonDataMap: { [key: number]: Pokemon } = {};
+      const spritesToPreload: string[] = [];
+      
       for (const encounter of newEncounters) {
         try {
           const pokemon = await pokeApi.getPokemon(encounter.id);
           pokemonDataMap[encounter.id] = pokemon;
+          
+          // Collect sprites for preloading
+          if (pokemon.sprites.front_default) {
+            spritesToPreload.push(pokemon.sprites.front_default);
+          }
         } catch (error) {
           console.error(`Failed to load Pokemon ${encounter.id}:`, error);
         }
       }
+      
+      // Preload all sprites for better performance
+      await imageCacheService.preloadImages(spritesToPreload);
+      
+      setLocation(currentLocation);
+      setEncounters(newEncounters);
       setPokemonData(pokemonDataMap);
-    } catch (error) {
-      console.error('Hunt initialization error:', error);
-      Alert.alert('Error', 'Failed to initialize hunt mode. Please try again.');
+    } catch (error: any) {
+      console.error('Hunt error:', error);
+      setError(error.message || 'Failed to initialize');
     } finally {
       setLoading(false);
     }
@@ -62,65 +114,45 @@ const HuntScreen: React.FC = () => {
     if (!location) return;
 
     const distance = locationService.calculateDistance(location, encounter.location);
+    const pokemon = pokemonData[encounter.id];
     
-    if (distance > 100) { // 100 meters
-      Alert.alert(
-        'Too Far Away!',
-        `You need to be within 100m of the Pokemon. You are ${Math.round(distance)}m away.`
-      );
+    if (!pokemon) return;
+    
+    if (distance > 100) {
       return;
     }
 
-    const pokemon = pokemonData[encounter.id];
-    if (pokemon) {
-      Alert.alert(
-        'Pokemon Encountered!',
-        `You found a wild ${pokemon.name}!\nType: ${pokemon.types.map(t => t.type.name).join(', ')}\nBiome: ${encounter.biome}`,
-        [
-          { text: 'Run Away', style: 'cancel' },
-          { 
-            text: 'Catch!', 
-            onPress: () => catchPokemon(encounter, pokemon)
-          }
-        ]
-      );
-    }
-  };
-
-  const catchPokemon = async (encounter: PokemonEncounter, pokemon: Pokemon) => {
-    // Simple catch logic
-    const catchSuccess = Math.random() > 0.3; // 70% success rate
-    
-    if (catchSuccess) {
-      await discoveryService.addDiscoveredPokemon(pokemon, encounter.location, encounter.biome);
-      Alert.alert('Success!', `You caught ${pokemon.name}!`);
-      setEncounters(prev => 
-        prev.map(enc => 
-          enc.id === encounter.id ? { ...enc, discovered: true } : enc
-        )
-      );
-    } else {
-      Alert.alert('Oh no!', `${pokemon.name} escaped!`);
-    }
+    navigation.navigate('ARCapture', { pokemon, biome: encounter.biome });
   };
 
   const refreshHunt = () => {
     initializeHunt();
   };
 
+  const calculateMapPosition = (pokemonLat: number, pokemonLng: number) => {
+    if (!location) return { x: 50, y: 50 };
+    const latDiff = (pokemonLat - location.latitude) * 100000;
+    const lngDiff = (pokemonLng - location.longitude) * 100000;
+    
+    const x = 50 + (lngDiff * 5);
+    const y = 50 - (latDiff * 5);
+    
+    return { x: Math.max(10, Math.min(90, x)), y: Math.max(10, Math.min(90, y)) };
+  };
+
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#FF0000" />
-        <Text style={styles.loadingText}>Searching for Pokemon...</Text>
+        <Text style={styles.loadingText}>🔍 Searching for Pokemon...</Text>
       </View>
     );
   }
 
-  if (!location) {
+  if (!location && !loading) {
     return (
       <View style={styles.errorContainer}>
-        <Text style={styles.errorText}>Unable to get your location</Text>
+        <Text style={styles.errorText}>{error || 'Unable to get location'}</Text>
         <TouchableOpacity style={styles.retryButton} onPress={initializeHunt}>
           <Text style={styles.retryButtonText}>Try Again</Text>
         </TouchableOpacity>
@@ -128,48 +160,173 @@ const HuntScreen: React.FC = () => {
     );
   }
 
+  if (!location) return null;
+
+  // Import MapScreen component
+  const MapScreen = require('./MapScreen').default;
+
+  const mapHtml = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+          body { margin: 0; padding: 0; overflow: hidden; }
+          #map { 
+            width: 100vw; 
+            height: 100vh; 
+            background: linear-gradient(180deg, #87CEEB 0%, #98D8C8 100%);
+            position: relative;
+          }
+          .player { 
+            width: 50px; 
+            height: 50px; 
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 40px;
+            z-index: 100;
+            animation: pulse 1.5s infinite;
+          }
+          @keyframes pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); }
+            50% { transform: translate(-50%, -50%) scale(1.1); }
+          }
+          .pokemon { 
+            width: 60px; 
+            height: 60px; 
+            position: absolute;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+            transition: all 0.3s;
+          }
+          .pokemon:active {
+            transform: translate(-50%, -50%) scale(1.2);
+          }
+          .pokemon img {
+            width: 100%;
+            height: 100%;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+          }
+          .caught {
+            opacity: 0.5;
+            filter: grayscale(1);
+          }
+          .range-circle {
+            width: 200px;
+            height: 200px;
+            border: 3px dashed rgba(255,255,255,0.5);
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+          }
+        </style>
+      </head>
+      <body>
+        <div id="map">
+          <div class="range-circle"></div>
+          <div class="player">🧑</div>
+          ${encounters.map((e, i) => {
+            const pos = calculateMapPosition(e.location.latitude, e.location.longitude);
+            const pokemon = pokemonData[e.id];
+            const sprite = pokemon?.sprites?.front_default || '';
+            return `<div class="pokemon ${e.discovered ? 'caught' : ''}" 
+              style="left: ${pos.x}%; top: ${pos.y}%;" 
+              onclick="window.ReactNativeWebView.postMessage('${i}')">
+              ${sprite ? `<img src="${sprite}" />` : '❓'}
+            </div>`;
+          }).join('')}
+        </div>
+      </body>
+    </html>
+  `;
+
   return (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Hunt Mode</Text>
-        <TouchableOpacity style={styles.refreshButton} onPress={refreshHunt}>
-          <Text style={styles.refreshButtonText}>🔄</Text>
-        </TouchableOpacity>
+        <Text style={styles.title}>🗺️ Hunt Mode</Text>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity 
+            style={[styles.viewButton, showMap && styles.activeButton]} 
+            onPress={() => setShowMap(true)}
+          >
+            <Text style={[styles.viewButtonText, showMap && styles.activeButtonText]}>Map</Text>
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={[styles.viewButton, !showMap && styles.activeButton]} 
+            onPress={() => setShowMap(false)}
+          >
+            <Text style={[styles.viewButtonText, !showMap && styles.activeButtonText]}>List</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.refreshButton} onPress={refreshHunt}>
+            <Text style={styles.refreshButtonText}>🔄</Text>
+          </TouchableOpacity>
+        </View>
       </View>
-
-      <MapView
-        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-        style={styles.map}
-        initialRegion={{
-          latitude: location.latitude,
-          longitude: location.longitude,
-          latitudeDelta: 0.01,
-          longitudeDelta: 0.01,
-        }}
-        showsUserLocation={true}
-        showsMyLocationButton={true}
-      >
-        {encounters.map((encounter, index) => {
-          const pokemon = pokemonData[encounter.id];
-          return (
-            <Marker
-              key={index}
-              coordinate={encounter.location}
-              title={pokemon?.name || 'Unknown Pokemon'}
-              description={`Biome: ${encounter.biome}`}
-              onPress={() => handleEncounterPress(encounter)}
-              pinColor={encounter.discovered ? '#00FF00' : '#FF0000'}
-            />
-          );
-        })}
-      </MapView>
+      
+      {showMap ? (
+        <MapScreen />
+      ) : (
+        <ScrollView style={styles.listContainer}>
+          <Text style={styles.locationText}>
+            📍 {location.latitude.toFixed(4)}, {location.longitude.toFixed(4)}
+          </Text>
+          
+          {encounters.map((encounter, index) => {
+            const pokemon = pokemonData[encounter.id];
+            const distance = locationService.calculateDistance(location, encounter.location);
+            const inRange = distance < 100;
+            
+            return (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  styles.encounterCard,
+                  encounter.discovered && styles.discoveredCard,
+                  inRange && !encounter.discovered && styles.inRangeCard
+                ]}
+                onPress={() => handleEncounterPress(encounter)}
+              >
+                {pokemon && (
+                  <LazyImage 
+                    source={{ uri: pokemon.sprites.front_default }} 
+                    style={styles.pokemonSprite}
+                    showLoading={true}
+                    loadingSize="small"
+                    fadeInDuration={300}
+                  />
+                )}
+                <View style={styles.cardContent}>
+                  <Text style={styles.pokemonName}>
+                    {pokemon?.name || 'Loading...'} #{encounter.id}
+                  </Text>
+                  <Text style={styles.encounterInfo}>🌍 {encounter.biome}</Text>
+                  <Text style={styles.encounterInfo}>
+                    📏 {Math.round(distance)}m away
+                  </Text>
+                  <Text style={[
+                    styles.encounterStatus,
+                    inRange && !encounter.discovered && styles.inRangeStatus
+                  ]}>
+                    {encounter.discovered ? '✅ Caught' : inRange ? '🎯 TAP TO CATCH!' : '🚶 Too Far'}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+        </ScrollView>
+      )}
 
       <View style={styles.infoPanel}>
         <Text style={styles.infoText}>
-          Pokemon Found: {encounters.filter(e => e.discovered).length}/{encounters.length}
+          ⭐ Caught: {encounters.filter(e => e.discovered).length}/{encounters.length}
         </Text>
         <Text style={styles.infoText}>
-          Tap on red markers to encounter Pokemon!
+          {showMap ? 'Tap Pokemon on map to catch!' : 'Get within 100m to catch!'}
         </Text>
       </View>
     </View>
@@ -177,78 +334,36 @@ const HuntScreen: React.FC = () => {
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f0f8ff',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: '#FF0000',
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  refreshButton: {
-    padding: 8,
-  },
-  refreshButtonText: {
-    fontSize: 20,
-    color: '#fff',
-  },
-  map: {
-    flex: 1,
-  },
-  infoPanel: {
-    backgroundColor: '#fff',
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#ddd',
-  },
-  infoText: {
-    fontSize: 14,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 4,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f0f8ff',
-  },
-  loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: '#666',
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f0f8ff',
-    padding: 20,
-  },
-  errorText: {
-    fontSize: 18,
-    color: '#666',
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  retryButton: {
-    backgroundColor: '#FF0000',
-    padding: 12,
-    borderRadius: 8,
-  },
-  retryButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
+  container: { flex: 1, backgroundColor: '#f0f8ff' },
+  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 12, backgroundColor: '#FF0000' },
+  title: { fontSize: 20, fontWeight: 'bold', color: '#fff' },
+  headerButtons: { flexDirection: 'row', gap: 8 },
+  viewButton: { backgroundColor: 'rgba(255,255,255,0.3)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 15 },
+  activeButton: { backgroundColor: '#fff' },
+  viewButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 12 },
+  activeButtonText: { color: '#FF0000' },
+  refreshButton: { backgroundColor: 'rgba(255,255,255,0.3)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 15 },
+  refreshButtonText: { fontSize: 16, color: '#fff' },
+  webview: { flex: 1 },
+  listContainer: { flex: 1, padding: 16 },
+  locationText: { fontSize: 14, color: '#666', marginBottom: 16, textAlign: 'center' },
+  encounterCard: { backgroundColor: '#fff', padding: 16, borderRadius: 12, marginBottom: 12, borderWidth: 2, borderColor: '#ddd', flexDirection: 'row', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
+  discoveredCard: { borderColor: '#00FF00', opacity: 0.6 },
+  inRangeCard: { borderColor: '#FFD700', backgroundColor: '#FFFACD' },
+  pokemonSprite: { width: 60, height: 60, marginRight: 12 },
+  cardContent: { flex: 1 },
+  pokemonName: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 4, textTransform: 'capitalize' },
+  encounterInfo: { fontSize: 13, color: '#666', marginBottom: 2 },
+  encounterStatus: { fontSize: 14, fontWeight: 'bold', color: '#666', marginTop: 4 },
+  inRangeStatus: { color: '#FF0000', fontSize: 16 },
+  infoPanel: { backgroundColor: '#fff', padding: 12, borderTopWidth: 1, borderTopColor: '#ddd' },
+  infoText: { fontSize: 13, color: '#666', textAlign: 'center', marginBottom: 2 },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f0f8ff' },
+  loadingText: { marginTop: 16, fontSize: 16, color: '#666' },
+  errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#f0f8ff', padding: 20 },
+  errorText: { fontSize: 18, color: '#666', textAlign: 'center', marginBottom: 20 },
+  retryButton: { backgroundColor: '#FF0000', padding: 12, borderRadius: 8 },
+  retryButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
 });
 
 export default HuntScreen;

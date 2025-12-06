@@ -17,6 +17,7 @@ import { PERMISSIONS, request, RESULTS } from 'react-native-permissions';
 import PokemonCard from './PokemonCard';
 import { Pokemon, pokeApi } from '../services/pokeApi';
 import { discoveryService } from '../services/discoveryService';
+import { imageCacheService } from '../services/imageCache';
 
 const PokedexList: React.FC = () => {
   const navigation = useNavigation();
@@ -116,10 +117,23 @@ const PokedexList: React.FC = () => {
     try {
       const list = await pokeApi.getPokemonList(20, 0);
       const pokemonList: Pokemon[] = [];
+      
+      // Pre-collect all Pokemon IDs for batch preloading
+      const pokemonIds: number[] = [];
+      
       for (const item of list) {
-        const id = parseInt(item.url.split('/')[6], 10);
+        const id = parseInt(item.url.split('/')[6]);
+        pokemonIds.push(id);
+      }
+      
+      // Now fetch Pokemon data and preload sprites in parallel
+      for (const id of pokemonIds) {
+        console.log(`Fetching Pokemon ${id}...`);
         const poke = await pokeApi.getPokemon(id);
         pokemonList.push(poke);
+        
+        // Preload sprites for better scrolling performance
+        imageCacheService.prefetchPokemonSprites(id);
       }
       setPokemon(pokemonList);
     } catch (err) {
