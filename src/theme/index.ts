@@ -124,7 +124,7 @@ export type PokemonTheme = MD3Theme & {
 export const pokemonTheme: PokemonTheme = {
   ...MD3LightTheme,
   fonts: configureFonts({ config: fontConfig }),
-  roundness: 18,
+  roundness: 4,
   colors: {
     ...MD3LightTheme.colors,
     primary: '#2C5AA0',
