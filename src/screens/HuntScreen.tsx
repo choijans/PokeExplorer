@@ -27,6 +27,7 @@ const HuntScreen: React.FC = () => {
   const webViewRef = useRef<WebView>(null);
   const spawnIntervalRef = useRef<any>(null);
   const despawnIntervalRef = useRef<any>(null);
+  const [mapHTML, setMapHTML] = useState<string>('');
 
   useEffect(() => {
     const init = async () => {
@@ -110,6 +111,10 @@ const HuntScreen: React.FC = () => {
       setLocation(currentLocation);
       setEncounters(newEncounters);
       setPokemonData(pokemonDataMap);
+      
+      // Generate map HTML once
+      const html = generateMapHTML(currentLocation, newEncounters, pokemonDataMap);
+      setMapHTML(html);
       setLoading(false);
       
       // Start spawn interval - new Pokemon every 30 seconds
@@ -186,15 +191,13 @@ const HuntScreen: React.FC = () => {
     if (!webViewRef.current || !showMap) return;
     webViewRef.current.injectJavaScript(`
       if (window.map && window.playerMarker) {
-        window.map.setView([${newLocation.latitude}, ${newLocation.longitude}]);
         window.playerMarker.setLatLng([${newLocation.latitude}, ${newLocation.longitude}]);
       }
       true;
     `);
   };
 
-  const getMapHTML = () => {
-    if (!location) return '';
+  const generateMapHTML = (loc: Location, encs: PokemonEncounter[], pokData: { [key: number]: Pokemon }) => {
     return `
       <!DOCTYPE html>
       <html>
@@ -210,7 +213,7 @@ const HuntScreen: React.FC = () => {
       <body>
         <div id="map"></div>
         <script>
-          const map = L.map('map').setView([${location.latitude}, ${location.longitude}], 17);
+          const map = L.map('map').setView([${loc.latitude}, ${loc.longitude}], 17);
           window.map = map;
           
           L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -225,18 +228,18 @@ const HuntScreen: React.FC = () => {
             iconAnchor: [24, 24]
           });
           
-          const playerMarker = L.marker([${location.latitude}, ${location.longitude}], { icon: playerIcon }).addTo(map);
+          const playerMarker = L.marker([${loc.latitude}, ${loc.longitude}], { icon: playerIcon }).addTo(map);
           window.playerMarker = playerMarker;
           
-          L.circle([${location.latitude}, ${location.longitude}], {
+          L.circle([${loc.latitude}, ${loc.longitude}], {
             color: 'red',
             fillColor: '#f03',
             fillOpacity: 0.1,
             radius: 100
           }).addTo(map);
           
-          ${encounters.map((e, i) => {
-            const pokemon = pokemonData[e.id];
+          ${encs.map((e, i) => {
+            const pokemon = pokData[e.id];
             if (!pokemon) return '';
             return `
               const pokemonIcon${i} = L.divIcon({
@@ -301,16 +304,20 @@ const HuntScreen: React.FC = () => {
         </View>
       </View>
       
-      {showMap ? (
+      {showMap && mapHTML ? (
         <WebView
           ref={webViewRef}
-          source={{ html: getMapHTML() }}
+          source={{ html: mapHTML }}
           style={styles.map}
           onMessage={(event) => {
             const index = parseInt(event.nativeEvent.data);
             handleEncounterPress(encounters[index]);
           }}
         />
+      ) : showMap ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#FF0000" />
+        </View>
       ) : (
         <ScrollView style={styles.listContainer}>
           <Text style={styles.locationText}>

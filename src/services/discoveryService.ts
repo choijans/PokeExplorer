@@ -4,7 +4,9 @@ import { Pokemon } from './pokeApi';
 export interface DiscoveredPokemon {
   id: number;
   name: string;
-  discoveredAt: string;
+  count: number;
+  firstDiscoveredAt: string;
+  lastDiscoveredAt: string;
   location?: {
     latitude: number;
     longitude: number;
@@ -28,21 +30,29 @@ class DiscoveryService {
   async addDiscoveredPokemon(pokemon: Pokemon, location?: { latitude: number; longitude: number }, biome?: string): Promise<void> {
     try {
       const discovered = await this.getDiscoveredPokemon();
+      const existing = discovered.find(p => p.id === pokemon.id);
+      const now = new Date().toISOString();
       
-      // Check if already discovered
-      if (discovered.find(p => p.id === pokemon.id)) {
-        return;
+      if (existing) {
+        // Increment count for existing Pokemon
+        existing.count = (existing.count || 1) + 1;
+        existing.lastDiscoveredAt = now;
+        if (location) existing.location = location;
+        if (biome) existing.biome = biome;
+      } else {
+        // First time discovering this Pokemon
+        const newDiscovery: DiscoveredPokemon = {
+          id: pokemon.id,
+          name: pokemon.name,
+          count: 1,
+          firstDiscoveredAt: now,
+          lastDiscoveredAt: now,
+          location,
+          biome,
+        };
+        discovered.push(newDiscovery);
       }
 
-      const newDiscovery: DiscoveredPokemon = {
-        id: pokemon.id,
-        name: pokemon.name,
-        discoveredAt: new Date().toISOString(),
-        location,
-        biome,
-      };
-
-      discovered.push(newDiscovery);
       await AsyncStorage.setItem(this.STORAGE_KEY, JSON.stringify(discovered));
     } catch (error) {
       console.error('Error saving discovered Pokemon:', error);

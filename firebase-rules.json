@@ -1,0 +1,40 @@
+{
+  "rules": {
+    "users": {
+      "$uid": {
+        ".read": "$uid === auth.uid",
+        ".write": "$uid === auth.uid",
+        "collection": {
+          "$pokemonId": {
+            ".indexOn": ["count", "lastCapturedAt"],
+            "captures": {
+              ".indexOn": ["capturedAt"]
+            }
+          }
+        },
+        "inventory": {
+          ".validate": "newData.hasChildren(['pokeball', 'greatball', 'ultraball', 'razz'])"
+        },
+        "stats": {
+          ".validate": "newData.hasChildren(['totalCaptured', 'uniqueCaptured'])"
+        }
+      }
+    },
+    "community": {
+      "posts": {
+        "$postId": {
+          ".read": true,
+          ".write": "auth != null",
+          ".validate": "newData.hasChildren(['userId', 'username', 'content', 'timestamp'])"
+        }
+      },
+      "leaderboard": {
+        ".read": true,
+        "$uid": {
+          ".write": "$uid === auth.uid",
+          ".validate": "newData.hasChildren(['username', 'totalCaptured', 'updatedAt'])"
+        }
+      }
+    }
+  }
+}
