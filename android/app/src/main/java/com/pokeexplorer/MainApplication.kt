@@ -3,24 +3,6 @@ package com.pokeexplorer
 import android.app.Application
 import com.facebook.react.PackageList
 import com.facebook.react.ReactApplication
-<<<<<<< HEAD
-import com.facebook.react.ReactHost
-import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
-import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
-import com.wenkesj.voice.VoicePackage
-
-class MainApplication : Application(), ReactApplication {
-
-  override val reactHost: ReactHost by lazy {
-    getDefaultReactHost(
-      context = applicationContext,
-      packageList = PackageList(this).packages.apply {
-        // Manually add VoicePackage for @react-native-voice/voice
-        add(VoicePackage())
-      }
-    )
-  }
-=======
 import com.facebook.react.ReactNativeHost
 import com.facebook.react.ReactPackage
 import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.load
@@ -32,8 +14,8 @@ class MainApplication : Application(), ReactApplication {
   override val reactNativeHost: ReactNativeHost =
       object : DefaultReactNativeHost(this) {
         override fun getPackages(): List<ReactPackage> {
-          val packages = PackageList(this).packages
-          return packages
+          // @react-native-voice/voice is auto-linked by PackageList, no need to add manually
+          return PackageList(this).packages
         }
 
         override fun getJSMainModuleName(): String = "index"
@@ -43,7 +25,6 @@ class MainApplication : Application(), ReactApplication {
         override val isNewArchEnabled: Boolean = BuildConfig.IS_NEW_ARCHITECTURE_ENABLED
         override val isHermesEnabled: Boolean = BuildConfig.IS_HERMES_ENABLED
       }
->>>>>>> origin/feature/hunt-mode
 
   override fun onCreate() {
     super.onCreate()
