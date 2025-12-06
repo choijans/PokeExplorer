@@ -316,7 +316,7 @@ export default function MapScreen() {
       if (distance < 100) {
         try {
           const pokemonData = await pokeApi.getPokemon(selectedPokemon.id);
-          navigation.navigate('ARCapture' as never, { pokemon: pokemonData, biome: selectedPokemon.biome } as never);
+          navigation.navigate('ARCapture', { pokemon: pokemonData, biome: selectedPokemon.biome });
           setPokemon(prev => prev.filter(p => p.id !== selectedPokemon.id));
           setSelectedPokemon(null);
         } catch (error) {

@@ -18,6 +18,8 @@
 	<string>pokeexplorer-8b5dc</string>
 	<key>STORAGE_BUCKET</key>
 	<string>pokeexplorer-8b5dc.firebasestorage.app</string>
+	<key>DATABASE_URL</key>
+	<string>https://pokeexplorer-8b5dc-default-rtdb.asia-southeast1.firebasedatabase.app</string>
 	<key>IS_ADS_ENABLED</key>
 	<false></false>
 	<key>IS_ANALYTICS_ENABLED</key>

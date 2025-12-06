@@ -990,6 +990,10 @@ PODS:
     - React-Core
   - react-native-geolocation-service (5.3.1):
     - React
+  - react-native-image-picker (8.2.1):
+    - glog
+    - RCT-Folly (= 2022.05.16.00)
+    - React-Core
   - react-native-maps (1.10.0):
     - React-Core
   - react-native-safe-area-context (4.11.0):
@@ -1186,6 +1190,8 @@ PODS:
     - FirebaseCoreExtension
     - React-Core
     - RNFBApp
+  - RNFS (2.20.0):
+    - React-Core
   - RNGestureHandler (2.20.2):
     - glog
     - RCT-Folly (= 2022.05.16.00)
@@ -1269,6 +1275,7 @@ DEPENDENCIES:
   - React-Mapbuffer (from `../node_modules/react-native/ReactCommon`)
   - "react-native-geolocation (from `../node_modules/@react-native-community/geolocation`)"
   - react-native-geolocation-service (from `../node_modules/react-native-geolocation-service`)
+  - react-native-image-picker (from `../node_modules/react-native-image-picker`)
   - react-native-maps (from `../node_modules/react-native-maps`)
   - react-native-safe-area-context (from `../node_modules/react-native-safe-area-context`)
   - "react-native-voice (from `../node_modules/@react-native-voice/voice`)"
@@ -1298,6 +1305,7 @@ DEPENDENCIES:
   - "RNFBAuth (from `../node_modules/@react-native-firebase/auth`)"
   - "RNFBDatabase (from `../node_modules/@react-native-firebase/database`)"
   - "RNFBMessaging (from `../node_modules/@react-native-firebase/messaging`)"
+  - RNFS (from `../node_modules/react-native-fs`)
   - RNGestureHandler (from `../node_modules/react-native-gesture-handler`)
   - "RNGoogleSignin (from `../node_modules/@react-native-google-signin/google-signin`)"
   - RNPermissions (from `../node_modules/react-native-permissions`)
@@ -1394,6 +1402,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/@react-native-community/geolocation"
   react-native-geolocation-service:
     :path: "../node_modules/react-native-geolocation-service"
+  react-native-image-picker:
+    :path: "../node_modules/react-native-image-picker"
   react-native-maps:
     :path: "../node_modules/react-native-maps"
   react-native-safe-area-context:
@@ -1452,6 +1462,8 @@ EXTERNAL SOURCES:
     :path: "../node_modules/@react-native-firebase/database"
   RNFBMessaging:
     :path: "../node_modules/@react-native-firebase/messaging"
+  RNFS:
+    :path: "../node_modules/react-native-fs"
   RNGestureHandler:
     :path: "../node_modules/react-native-gesture-handler"
   RNGoogleSignin:
@@ -1522,6 +1534,7 @@ SPEC CHECKSUMS:
   React-Mapbuffer: 30deaceab523707646f5f35efad961133e4e1f25
   react-native-geolocation: ba86fca23003d7d9b201a827ebc0987805d265f2
   react-native-geolocation-service: 32b2c2a3b91e70ce2a8d0c684801aaeb0a07e0ec
+  react-native-image-picker: 8f8584698b9908c76f3d30463a969432bdc7f634
   react-native-maps: 57f0acd0e7224dbc3772bc554a5257060a7bb93c
   react-native-safe-area-context: ca0ebcd9798c5a45863c608c961d4f3f984b6ed2
   react-native-voice: 908a0eba96c8c3d643e4f98b7232c6557d0a6f9c
@@ -1552,6 +1565,7 @@ SPEC CHECKSUMS:
   RNFBAuth: a33d15faa7f061c350c0744ee9ee2897ee102cf3
   RNFBDatabase: b16b989ec815df1023c828700b8ee5df7752ebd3
   RNFBMessaging: 70b12c9f22c7c9d5011ac9b12ac2bafbfb081267
+  RNFS: 89de7d7f4c0f6bafa05343c578f61118c8282ed8
   RNGestureHandler: 10ce5ee715c2e55848868c4cab3fbea9231772f6
   RNGoogleSignin: b3fb27020830c3e92f92c71628533922d9b6876d
   RNPermissions: 4f7b81b0d457c8ec4e892cc36ef2376734a4b22c

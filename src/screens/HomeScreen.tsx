@@ -1,25 +1,48 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../navigation/AppNavigator';
-
-type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'Home'>;
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { Button, Text, useTheme } from 'react-native-paper';
+import Screen from '../components/ui/Screen';
+import SectionCard from '../components/ui/SectionCard';
+import type { RootStackParamList } from '../navigation/AppNavigator';
+import type { PokemonTheme } from '../theme';
+import type { TabParamList } from '../navigation/BottomTabNavigator';
 
 const HomeScreen: React.FC = () => {
-  const navigation = useNavigation<HomeScreenNavigationProp>();
-
+  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const theme = useTheme<PokemonTheme>();
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>Welcome to PokeExplorer!</Text>
-      <Text style={styles.subtitle}>Discover and catalog Pokémon in the real world.</Text>
-      <TouchableOpacity
-        style={styles.button}
-        onPress={() => navigation.navigate('Profile')}
-      >
-        <Text style={styles.buttonText}>View Profile</Text>
-      </TouchableOpacity>
-    </View>
+    <Screen>
+      <View style={styles.container}>
+        <SectionCard>
+          <View style={styles.hero}>
+            <Text variant="headlineMedium" style={{ color: theme.colors.onSurface }}>
+              Welcome to PokeExplorer
+            </Text>
+            <Text
+              variant="bodyLarge"
+              style={{ color: theme.colors.onSurfaceVariant }}
+            >
+              Chart your Pokémon discoveries, hunt in the real world, and share adventures with Trainers everywhere.
+            </Text>
+            <Button
+              mode="contained"
+              icon="account-circle"
+              onPress={() =>
+                navigation
+                  .getParent<BottomTabNavigationProp<TabParamList>>()
+                  ?.navigate('Profile')
+              }
+              style={styles.button}
+            >
+              View Trainer Profile
+            </Button>
+          </View>
+        </SectionCard>
+      </View>
+    </Screen>
   );
 };
 
@@ -27,33 +50,12 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-    backgroundColor: '#f5f5f5',
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 10,
-    color: '#333',
-  },
-  subtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-    marginBottom: 40,
-    color: '#666',
+  hero: {
+    gap: 16,
   },
   button: {
-    backgroundColor: '#28a745',
-    padding: 15,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: 'bold',
+    alignSelf: 'flex-start',
   },
 });
 

@@ -1,12 +1,23 @@
-import React, { useEffect } from 'react';
-import { View, Text, ScrollView, StyleSheet } from 'react-native';
+import React, { useEffect, useMemo, useState } from 'react';
+import { View, StyleSheet, TouchableOpacity } from 'react-native';
 import { RouteProp } from '@react-navigation/native';
-import { pokeApi } from '../services/pokeApi';
+import {
+  Button,
+  Chip,
+  ProgressBar,
+  Text,
+  useTheme,
+} from 'react-native-paper';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { LazyImage } from './LazyImage';
 import { imageCacheService } from '../services/imageCache';
+import sharingService from '../services/sharingService';
+import type { PokemonTheme } from '../theme';
+import Screen from './ui/Screen';
+import SectionCard from './ui/SectionCard';
+import { chipStyles } from '../styles/chipStyles';
 
-type PokemonDetailRouteProp = RouteProp<RootStackParamList, 'PokedexDetail'>;
+ type PokemonDetailRouteProp = RouteProp<RootStackParamList, 'PokedexDetail'>;
 
 interface PokemonDetailProps {
   route: PokemonDetailRouteProp;
@@ -14,22 +25,43 @@ interface PokemonDetailProps {
 
 const PokemonDetail: React.FC<PokemonDetailProps> = ({ route }) => {
   const { pokemon } = route.params;
+  const theme = useTheme<PokemonTheme>();
 
-  // Preload all sprite variants for smoother viewing
+  const [showAnimated, setShowAnimated] = useState(false);
+
+  const staticImage = useMemo(
+    () =>
+      pokemon.sprites.other?.['official-artwork']?.front_default ??
+      pokemon.sprites.front_default,
+    [pokemon],
+  );
+
+  const animatedImage = useMemo(() => {
+    const spriteVersions = (pokemon as any).sprites?.versions;
+    return (
+      spriteVersions?.['generation-v']?.['black-white']?.animated?.front_default ?? null
+    );
+  }, [pokemon]);
+
+  const canToggleImage = Boolean(animatedImage);
+  const currentImage = canToggleImage && showAnimated && animatedImage ? animatedImage : staticImage;
+
+  useEffect(() => {
+    setShowAnimated(false);
+  }, [pokemon.id]);
+
   useEffect(() => {
     const preloadSprites = async () => {
-      const sprites = [
-        pokemon.sprites.front_default,
-        pokemon.sprites.other?.['official-artwork']?.front_default,
-      ].filter(Boolean) as string[];
-      
-      // Also preload by ID for different views
       await imageCacheService.prefetchPokemonSprites(pokemon.id);
-      await imageCacheService.preloadImages(sprites);
+
+      const sprites = [staticImage, animatedImage].filter(Boolean) as string[];
+      if (sprites.length > 0) {
+        await imageCacheService.preloadImages(sprites);
+      }
     };
-    
+
     preloadSprites();
-  }, [pokemon]);
+  }, [pokemon, staticImage, animatedImage]);
 
   const getTypeColor = (type: string) => {
     const colors: { [key: string]: string } = {
@@ -52,208 +84,288 @@ const PokemonDetail: React.FC<PokemonDetailProps> = ({ route }) => {
       steel: '#B8B8D0',
       fairy: '#EE99AC',
     };
-    return colors[type] || '#68A090';
+    return colors[type] || theme.colors.primary;
   };
 
   const getStatColor = (stat: number) => {
-    if (stat >= 100) return '#4CAF50';
-    if (stat >= 70) return '#FFC107';
-    return '#F44336';
+    if (stat >= 100) return theme.colors.primary;
+    if (stat >= 70) return theme.colors.secondary;
+    return theme.colors.error;
+  };
+
+  const handleShare = async () => {
+    const shareData = {
+      id: pokemon.id,
+      name: pokemon.name,
+      types: pokemon.types.map((t) => t.type.name),
+      height: pokemon.height,
+      weight: pokemon.weight,
+      abilities: pokemon.abilities.map((a) => a.ability.name),
+      stats: pokemon.stats.map((s) => ({
+        name: s.stat.name,
+        base_stat: s.base_stat,
+      })),
+      imageUrl: pokemon.sprites.other?.['official-artwork']?.front_default || pokemon.sprites.front_default,
+    };
+
+    await sharingService.sharePokemonDetails(shareData);
+  };
+
+  const toggleImageMode = () => {
+    if (!canToggleImage) {
+      return;
+    }
+
+    setShowAnimated((prev) => !prev);
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <LazyImage
-          source={{ uri: pokemon.sprites.other?.['official-artwork']?.front_default || pokemon.sprites.front_default }}
-          style={styles.mainImage}
-          resizeMode="contain"
-          showLoading={true}
-          loadingSize="large"
-          fadeInDuration={400}
-        />
-        <Text style={styles.name}>{pokemon.name.charAt(0).toUpperCase() + pokemon.name.slice(1)}</Text>
-        <Text style={styles.id}>#{pokemon.id.toString().padStart(3, '0')}</Text>
-        <View style={styles.types}>
-          {pokemon.types.map((typeInfo, index) => (
-            <View
-              key={index}
-              style={[styles.typeBadge, { backgroundColor: getTypeColor(typeInfo.type.name) }]}
-            >
-              <Text style={styles.typeText}>{typeInfo.type.name.toUpperCase()}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Basic Info</Text>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Height:</Text>
-          <Text style={styles.infoValue}>{pokemon.height / 10} m</Text>
-        </View>
-        <View style={styles.infoRow}>
-          <Text style={styles.infoLabel}>Weight:</Text>
-          <Text style={styles.infoValue}>{pokemon.weight / 10} kg</Text>
-        </View>
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Abilities</Text>
-        {pokemon.abilities.map((ability, index) => (
-          <Text key={index} style={styles.ability}>
-            {ability.ability.name.charAt(0).toUpperCase() + ability.ability.name.slice(1)}
-          </Text>
-        ))}
-      </View>
-
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Base Stats</Text>
-        {pokemon.stats.map((stat, index) => (
-          <View key={index} style={styles.statRow}>
-            <Text style={styles.statName}>{stat.stat.name.charAt(0).toUpperCase() + stat.stat.name.slice(1)}</Text>
-            <View style={styles.statBar}>
+    <Screen scrollable>
+      <View style={{ gap: theme.custom.spacing.lg }}>
+        <View
+          style={[
+            styles.hero,
+            {
+              borderRadius: theme.custom.radius.lg,
+              backgroundColor: theme.colors.surface,
+              shadowColor: theme.colors.outlineVariant,
+            },
+          ]}
+        >
+          <TouchableOpacity
+            activeOpacity={canToggleImage ? 0.85 : 1}
+            onPress={toggleImageMode}
+            disabled={!canToggleImage}
+            style={[
+              styles.imageContainer,
+              {
+                backgroundColor: theme.colors.surfaceVariant,
+                borderRadius: theme.custom.radius.lg,
+              },
+            ]}
+          >
+            <LazyImage
+              key={showAnimated && canToggleImage ? 'animated' : 'static'}
+              source={{ uri: currentImage }}
+              style={styles.mainImage}
+              resizeMode="contain"
+              showLoading
+              loadingSize="large"
+              fadeInDuration={300}
+            />
+            {canToggleImage && (
               <View
                 style={[
-                  styles.statFill,
+                  styles.imageBadge,
                   {
-                    width: `${(stat.base_stat / 255) * 100}%`,
-                    backgroundColor: getStatColor(stat.base_stat),
+                    backgroundColor: theme.colors.surface,
+                    borderColor: theme.colors.outlineVariant,
                   },
                 ]}
-              />
-            </View>
-            <Text style={styles.statValue}>{stat.base_stat}</Text>
+              >
+                <Text variant="labelSmall" style={{ color: theme.colors.onSurfaceVariant }}>
+                  {showAnimated ? 'Animated sprite' : 'Official artwork'}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.heroMeta}>
+            <Text
+              variant="headlineMedium"
+              style={{
+                color: theme.colors.onSurface,
+                textTransform: 'capitalize',
+                textAlign: 'center',
+              }}
+            >
+              {pokemon.name}
+            </Text>
+            <Text variant="titleMedium" style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center' }}>
+              #{pokemon.id.toString().padStart(3, '0')}
+            </Text>
           </View>
-        ))}
+
+          <View style={styles.typeRow}>
+            {pokemon.types.map((typeInfo, index) => (
+              <Chip
+                key={index}
+                textStyle={styles.typeText}
+                style={[chipStyles.base, { backgroundColor: getTypeColor(typeInfo.type.name) }]}
+              >
+                {typeInfo.type.name.toUpperCase()}
+              </Chip>
+            ))}
+          </View>
+
+          <View style={styles.metricRow}>
+            <View
+              style={[styles.metricCard, { backgroundColor: theme.colors.surfaceVariant }]}
+            >
+              <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+                Height
+              </Text>
+              <Text variant="titleMedium" style={{ color: theme.colors.onSurface }}>
+                {(pokemon.height / 10).toFixed(1)} m
+              </Text>
+            </View>
+            <View
+              style={[styles.metricCard, { backgroundColor: theme.colors.surfaceVariant }]}
+            >
+              <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+                Weight
+              </Text>
+              <Text variant="titleMedium" style={{ color: theme.colors.onSurface }}>
+                {(pokemon.weight / 10).toFixed(1)} kg
+              </Text>
+            </View>
+          </View>
+
+          {canToggleImage && (
+            <Text
+              variant="labelSmall"
+              style={{ color: theme.colors.onSurfaceVariant, textAlign: 'center' }}
+            >
+              Tap the image to switch to {showAnimated ? 'official artwork' : 'animated sprite'}.
+            </Text>
+          )}
+
+          <Button
+            mode="contained-tonal"
+            icon="share-variant"
+            onPress={handleShare}
+            style={styles.shareButton}
+          >
+            Share Pokémon
+          </Button>
+        </View>
+
+        <SectionCard
+          title="Abilities"
+          style={[styles.section, { backgroundColor: theme.colors.surface }]}
+          contentStyle={styles.sectionContent}
+        >
+          <View style={styles.abilityList}>
+            {pokemon.abilities.map((ability, index) => (
+              <Chip
+                key={index}
+                style={[chipStyles.base, { backgroundColor: theme.colors.surfaceVariant }]}
+                textStyle={{ color: theme.colors.onSurface }}
+              >
+                {ability.ability.name.charAt(0).toUpperCase() + ability.ability.name.slice(1)}
+              </Chip>
+            ))}
+          </View>
+        </SectionCard>
+
+        <SectionCard
+          title="Base Stats"
+          style={[styles.section, { backgroundColor: theme.colors.surface }]}
+          contentStyle={styles.sectionContent}
+        >
+          <View style={styles.statList}>
+            {pokemon.stats.map((stat, index) => (
+              <View key={index} style={styles.statRow}>
+                <View style={styles.statLabel}>
+                  <Text variant="bodyMedium" style={{ color: theme.colors.onSurface }}>
+                    {stat.stat.name.charAt(0).toUpperCase() + stat.stat.name.slice(1)}
+                  </Text>
+                  <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+                    {stat.base_stat}
+                  </Text>
+                </View>
+                <ProgressBar
+                  progress={Math.min(stat.base_stat / 255, 1)}
+                  color={getStatColor(stat.base_stat)}
+                  style={{ borderRadius: theme.custom.radius.sm, height: 6 }}
+                />
+              </View>
+            ))}
+          </View>
+        </SectionCard>
       </View>
-    </ScrollView>
+    </Screen>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5f5f5',
+  hero: {
+    padding: 24,
+    gap: 20,
   },
-  header: {
-    backgroundColor: '#fff',
-    padding: 20,
+  imageContainer: {
+    justifyContent: 'center',
     alignItems: 'center',
-    borderBottomWidth: 1,
-    borderBottomColor: '#ddd',
+    padding: 16,
+    position: 'relative',
+    overflow: 'hidden',
   },
   mainImage: {
-    width: 200,
-    height: 200,
-    marginBottom: 16,
+    width: 220,
+    height: 220,
   },
-  name: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 8,
-  },
-  id: {
-    fontSize: 18,
-    color: '#666',
-    marginBottom: 16,
-  },
-  types: {
-    flexDirection: 'row',
-  },
-  typeBadge: {
+  imageBadge: {
+    position: 'absolute',
+    bottom: 12,
+    right: 12,
+    borderRadius: 999,
+    borderWidth: 1,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 16,
-    marginHorizontal: 4,
+  },
+  heroMeta: {
+    gap: 4,
+  },
+  typeRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    justifyContent: 'center',
   },
   typeText: {
     color: '#fff',
-    fontSize: 14,
-    fontWeight: 'bold',
+    fontWeight: '700',
+    letterSpacing: 0.5,
+    lineHeight: 16,
+  },
+  metricRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 12,
+  },
+  metricCard: {
+    minWidth: 120,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    gap: 4,
+  },
+  shareButton: {
+    alignSelf: 'center',
   },
   section: {
-    backgroundColor: '#fff',
-    margin: 8,
-    padding: 16,
-    borderRadius: 8,
+    borderRadius: 20,
   },
-  sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 12,
+  sectionContent: {
+    gap: 12,
+    paddingVertical: 16,
   },
-  infoRow: {
+  abilityList: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
+    flexWrap: 'wrap',
+    gap: 8,
   },
-  infoLabel: {
-    fontSize: 16,
-    color: '#666',
-  },
-  infoValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  ability: {
-    fontSize: 16,
-    color: '#333',
-    marginBottom: 4,
+  statList: {
+    gap: 16,
   },
   statRow: {
+    gap: 8,
+  },
+  statLabel: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
-  },
-  statName: {
-    width: 80,
-    fontSize: 14,
-    color: '#666',
-  },
-  statBar: {
-    flex: 1,
-    height: 8,
-    backgroundColor: '#ddd',
-    borderRadius: 4,
-    marginHorizontal: 8,
-  },
-  statFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  statValue: {
-    width: 30,
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#333',
-    textAlign: 'right',
-  },
-  flavorText: {
-    fontSize: 16,
-    color: '#333',
-    lineHeight: 24,
-  },
-  evolutionContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-  },
-  evolutionText: {
-    fontSize: 16,
-    color: '#333',
-    marginHorizontal: 4,
-  },
-  arrow: {
-    fontSize: 18,
-    color: '#666',
-    marginHorizontal: 8,
-  },
-  loader: {
-    margin: 20,
   },
 });
 

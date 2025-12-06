@@ -44,6 +44,7 @@ export const LazyImage: React.FC<LazyImageProps> = ({
   const [error, setError] = useState(false);
   const [opacity] = useState(new Animated.Value(0));
   const [imageSource, setImageSource] = useState<ImageSourcePropType | null>(null);
+  const [isGif, setIsGif] = useState(false);
 
   useEffect(() => {
     if (source && typeof source === 'object' && 'uri' in source) {
@@ -52,7 +53,7 @@ export const LazyImage: React.FC<LazyImageProps> = ({
       if (uri) {
         // Get cached or optimized URL
         const cachedUrl = imageCacheService.getCachedUrl(uri);
-        
+        setIsGif(imageCacheService.isGif(cachedUrl));
         setImageSource({ uri: cachedUrl });
         
         // Add to cache
@@ -60,12 +61,18 @@ export const LazyImage: React.FC<LazyImageProps> = ({
       }
     } else {
       setImageSource(source);
+      setIsGif(false);
     }
   }, [source]);
 
   const handleLoadStart = () => {
     setLoading(true);
     setError(false);
+    if (!isGif) {
+      opacity.setValue(0);
+    } else {
+      opacity.setValue(1);
+    }
     onLoadStart?.();
   };
 
@@ -74,11 +81,13 @@ export const LazyImage: React.FC<LazyImageProps> = ({
     onLoadEnd?.();
     
     // Fade in animation
-    Animated.timing(opacity, {
-      toValue: 1,
-      duration: fadeInDuration,
-      useNativeDriver: true,
-    }).start();
+    if (!isGif) {
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: fadeInDuration,
+        useNativeDriver: true,
+      }).start();
+    }
   };
 
   const handleError = () => {
@@ -126,14 +135,25 @@ export const LazyImage: React.FC<LazyImageProps> = ({
 
       {/* Actual image */}
       {!error && (
-        <Animated.Image
-          {...props}
-          source={imageSource}
-          style={[style, { opacity }]}
-          onLoadStart={handleLoadStart}
-          onLoadEnd={handleLoadEnd}
-          onError={handleError}
-        />
+        isGif ? (
+          <Image
+            {...props}
+            source={imageSource}
+            style={style}
+            onLoadStart={handleLoadStart}
+            onLoadEnd={handleLoadEnd}
+            onError={handleError}
+          />
+        ) : (
+          <Animated.Image
+            {...props}
+            source={imageSource}
+            style={[style, { opacity }]}
+            onLoadStart={handleLoadStart}
+            onLoadEnd={handleLoadEnd}
+            onError={handleError}
+          />
+        )
       )}
     </View>
   );

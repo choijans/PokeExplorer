@@ -1,7 +1,10 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
+import { Card, Chip, Text, useTheme } from 'react-native-paper';
 import { Pokemon } from '../services/pokeApi';
 import { LazyImage } from './LazyImage';
+import type { PokemonTheme } from '../theme';
+import { chipStyles } from '../styles/chipStyles';
 
 interface PokemonCardProps {
   pokemon: Pokemon;
@@ -10,6 +13,8 @@ interface PokemonCardProps {
 }
 
 const PokemonCard: React.FC<PokemonCardProps> = ({ pokemon, onPress, isDiscovered = false }) => {
+  const theme = useTheme<PokemonTheme>();
+
   const getTypeColor = (type: string) => {
     const colors: { [key: string]: string } = {
       normal: '#A8A878',
@@ -35,106 +40,119 @@ const PokemonCard: React.FC<PokemonCardProps> = ({ pokemon, onPress, isDiscovere
   };
 
   return (
-    <TouchableOpacity style={[styles.card, isDiscovered && styles.discoveredCard]} onPress={onPress}>
-      {isDiscovered && (
-        <View style={styles.discoveredBadge}>
-          <Text style={styles.discoveredText}>✓</Text>
+    <Card
+      mode="elevated"
+      onPress={onPress}
+      style={[
+        styles.card,
+        { borderRadius: theme.custom.radius.lg, backgroundColor: theme.colors.surface },
+        isDiscovered && { borderColor: theme.colors.primary, borderWidth: 2 },
+      ]}
+    >
+      <Card.Content style={styles.content}>
+        <View style={[styles.imageWrapper, { backgroundColor: theme.colors.primaryContainer }]}> 
+          <LazyImage
+            source={{
+              uri:
+                pokemon.sprites.other?.['official-artwork']?.front_default ||
+                pokemon.sprites.front_default,
+            }}
+            style={styles.image}
+            resizeMode="contain"
+            showLoading={true}
+            loadingSize="small"
+            fadeInDuration={300}
+          />
         </View>
-      )}
-      <LazyImage
-        source={{ uri: pokemon.sprites.other?.['official-artwork']?.front_default || pokemon.sprites.front_default }}
-        style={styles.image}
-        resizeMode="contain"
-        showLoading={true}
-        loadingSize="small"
-        fadeInDuration={300}
-      />
-      <View style={styles.info}>
-        <Text style={styles.name}>{pokemon.name.charAt(0).toUpperCase() + pokemon.name.slice(1)}</Text>
-        <Text style={styles.id}>#{pokemon.id.toString().padStart(3, '0')}</Text>
-        <View style={styles.types}>
-          {pokemon.types.map((typeInfo, index) => (
-            <View
-              key={index}
-              style={[styles.typeBadge, { backgroundColor: getTypeColor(typeInfo.type.name) }]}
+        <View style={styles.info}>
+          <View style={styles.titleRow}>
+            <Text
+              variant="titleMedium"
+              style={{ color: theme.colors.onSurface, flexShrink: 1, minWidth: 0 }}
             >
-              <Text style={styles.typeText}>{typeInfo.type.name.toUpperCase()}</Text>
-            </View>
-          ))}
+              {pokemon.name.charAt(0).toUpperCase() + pokemon.name.slice(1)}
+            </Text>
+            {isDiscovered && (
+              <Chip
+                icon="check"
+                textStyle={{
+                  color: theme.colors.onPrimary,
+                  fontWeight: '600',
+                }}
+                style={[
+                  chipStyles.base,
+                  { backgroundColor: theme.colors.tertiary },
+                ]}
+              >
+                Caught
+              </Chip>
+            )}
+          </View>
+          <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>
+            #{pokemon.id.toString().padStart(3, '0')}
+          </Text>
+          <View style={styles.types}>
+            {pokemon.types.map((typeInfo, index) => (
+              <Chip
+                key={index}
+                textStyle={styles.typeText}
+                style={[
+                  chipStyles.base,
+                  {
+                    backgroundColor: getTypeColor(typeInfo.type.name),
+                  },
+                ]}
+              >
+                {typeInfo.type.name.toUpperCase()}
+              </Chip>
+            ))}
+          </View>
         </View>
-      </View>
-    </TouchableOpacity>
+      </Card.Content>
+    </Card>
   );
 };
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    margin: 8,
+    marginHorizontal: 8,
+    marginVertical: 6,
+  },
+  content: {
     flexDirection: 'row',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
+    gap: 16,
+  },
+  imageWrapper: {
+    width: 84,
+    height: 84,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   image: {
-    width: 80,
-    height: 80,
-    marginRight: 16,
+    width: 72,
+    height: 72,
   },
   info: {
     flex: 1,
-  },
-  name: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 4,
-  },
-  id: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 8,
+    gap: 6,
   },
   types: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-  },
-  typeBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    marginRight: 4,
-    marginBottom: 4,
+    gap: 6,
   },
   typeText: {
     color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
+    fontWeight: '700',
+    lineHeight: 16,
   },
-  discoveredCard: {
-    borderWidth: 2,
-    borderColor: '#4CAF50',
-  },
-  discoveredBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: '#4CAF50',
-    borderRadius: 12,
-    width: 24,
-    height: 24,
-    justifyContent: 'center',
+  titleRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-  },
-  discoveredText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
+    gap: 8,
+    flexWrap: 'wrap',
   },
 });
 
