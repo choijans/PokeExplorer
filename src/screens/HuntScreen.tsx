@@ -15,6 +15,7 @@ import { discoveryService } from '../services/discoveryService';
 import { LazyImage } from '../components/LazyImage';
 import { imageCacheService } from '../services/imageCache';
 
+
 const HuntScreen: React.FC = () => {
   const navigation = useNavigation();
   const [location, setLocation] = useState<Location | null>(null);
@@ -23,10 +24,16 @@ const HuntScreen: React.FC = () => {
   const [pokemonData, setPokemonData] = useState<{ [key: number]: Pokemon }>({});
   const [error, setError] = useState<string | null>(null);
   const [showMap, setShowMap] = useState(true);
+  
+  useEffect(() => {
+    if (showMap && location && encounters.length > 0) {
+      const html = generateMapHTML(location, encounters, pokemonData);
+      setMapHTML(html);
+    }
+  }, [showMap, encounters.length]);
   const [locationWatcher, setLocationWatcher] = useState<any>(null);
   const webViewRef = useRef<WebView>(null);
-  const spawnIntervalRef = useRef<any>(null);
-  const despawnIntervalRef = useRef<any>(null);
+
   const [mapHTML, setMapHTML] = useState<string>('');
 
   useEffect(() => {
@@ -49,8 +56,9 @@ const HuntScreen: React.FC = () => {
         locationWatcher.remove();
       }
       if (spawnIntervalRef.current) {
-        clearInterval(spawnIntervalRef.current);
+        clearTimeout(spawnIntervalRef.current);
       }
+      // Clean up despawn check
       if (despawnIntervalRef.current) {
         clearInterval(despawnIntervalRef.current);
       }
@@ -73,6 +81,9 @@ const HuntScreen: React.FC = () => {
     return unsubscribe;
   }, [navigation]);
 
+  const spawnIntervalRef = useRef<any>(null);
+  const despawnIntervalRef = useRef<any>(null);
+
   const initializeHunt = async () => {
     setLoading(true);
     setError(null);
@@ -86,7 +97,10 @@ const HuntScreen: React.FC = () => {
 
       const currentLocation = await locationService.getCurrentLocation();
       console.log('Got location:', currentLocation);
+      
+      // Initial spawn
       const newEncounters = locationService.generatePokemonEncounters(currentLocation);
+      setEncounters(newEncounters);
       
       const pokemonDataMap: { [key: number]: Pokemon } = {};
       const spritesToPreload: string[] = [];
@@ -96,7 +110,6 @@ const HuntScreen: React.FC = () => {
           const pokemon = await pokeApi.getPokemon(encounter.id);
           pokemonDataMap[encounter.id] = pokemon;
           
-          // Collect sprites for preloading
           if (pokemon.sprites.front_default) {
             spritesToPreload.push(pokemon.sprites.front_default);
           }
@@ -105,30 +118,64 @@ const HuntScreen: React.FC = () => {
         }
       }
       
-      // Preload all sprites for better performance
       await imageCacheService.preloadImages(spritesToPreload);
       
       setLocation(currentLocation);
-      setEncounters(newEncounters);
       setPokemonData(pokemonDataMap);
       
-      // Generate map HTML once
+      setLoading(false);
       const html = generateMapHTML(currentLocation, newEncounters, pokemonDataMap);
       setMapHTML(html);
-      setLoading(false);
+
+      // Spawn new Pokemon with dynamic rate based on count
+      const spawnPokemon = async () => {
+        setEncounters(prev => {
+          // Despawn old Pokemon (5 minutes)
+          const now = Date.now();
+          const filtered = prev.filter(e => (now - e.spawnTime) < 300000);
+          
+          // Cap at 30 Pokemon
+          if (filtered.length >= 30) {
+            const delay = 120000; // 2 minutes when at cap
+            spawnIntervalRef.current = setTimeout(spawnPokemon, delay);
+            return filtered;
+          }
+          
+          const newEncounter = locationService.generatePokemonEncounters(currentLocation)[0];
+          if (newEncounter) {
+            pokeApi.getPokemon(newEncounter.id).then(pokemon => {
+              setPokemonData(p => ({ ...p, [newEncounter.id]: pokemon }));
+              console.log('New Pokemon spawned:', pokemon.name);
+            }).catch(err => console.error('Failed to spawn:', err));
+            
+            const updated = [...filtered, newEncounter];
+            // Dynamic spawn rate: slower as count increases
+            const delay = updated.length < 10 ? 20000 : updated.length < 20 ? 40000 : 80000;
+            spawnIntervalRef.current = setTimeout(spawnPokemon, delay);
+            return updated;
+          }
+          
+          const delay = filtered.length < 10 ? 20000 : filtered.length < 20 ? 40000 : 80000;
+          spawnIntervalRef.current = setTimeout(spawnPokemon, delay);
+          return filtered;
+        });
+      };
       
-      // Start spawn interval - new Pokemon every 30 seconds
-      spawnIntervalRef.current = setInterval(() => {
-        spawnNewPokemon(currentLocation);
-      }, 30000);
+      spawnIntervalRef.current = setTimeout(spawnPokemon, 20000);
       
-      // Start despawn interval - remove Pokemon after 5 minutes
+      // Periodic despawn check every minute
       despawnIntervalRef.current = setInterval(() => {
-        despawnOldPokemon();
+        setEncounters(prev => {
+          const now = Date.now();
+          const filtered = prev.filter(e => (now - e.spawnTime) < 300000);
+          if (filtered.length !== prev.length) {
+            console.log(`Despawned ${prev.length - filtered.length} Pokemon`);
+          }
+          return filtered;
+        });
       }, 60000);
     } catch (error: any) {
       console.error('Hunt error:', error);
-      // Use fallback location on error
       const fallbackLocation = { latitude: 10.35168, longitude: 123.91317 };
       setLocation(fallbackLocation);
       const newEncounters = locationService.generatePokemonEncounters(fallbackLocation);
@@ -149,39 +196,12 @@ const HuntScreen: React.FC = () => {
       return;
     }
 
+    // Remove from encounters list
+    setEncounters(prev => prev.filter(e => e !== encounter));
     navigation.navigate('ARCapture', { pokemon, biome: encounter.biome });
   };
 
-  const spawnNewPokemon = async (currentLocation: Location) => {
-    const newEncounter = locationService.generatePokemonEncounters(currentLocation)[0];
-    if (!newEncounter) return;
-    
-    try {
-      const pokemon = await pokeApi.getPokemon(newEncounter.id);
-      setPokemonData(prev => ({ ...prev, [newEncounter.id]: pokemon }));
-      setEncounters(prev => [...prev, newEncounter]);
-      console.log(`New Pokemon spawned: ${pokemon.name}`);
-    } catch (error) {
-      console.error('Failed to spawn Pokemon:', error);
-    }
-  };
-  
-  const despawnOldPokemon = () => {
-    const now = Date.now();
-    const fiveMinutes = 5 * 60 * 1000;
-    
-    setEncounters(prev => {
-      const remaining = prev.filter(e => {
-        const age = now - e.spawnTime;
-        if (age > fiveMinutes && !e.discovered) {
-          console.log(`Pokemon ${e.id} despawned`);
-          return false;
-        }
-        return true;
-      });
-      return remaining;
-    });
-  };
+
 
   const refreshHunt = () => {
     initializeHunt();

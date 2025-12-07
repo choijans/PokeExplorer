@@ -86,9 +86,6 @@ android {
         manifestPlaceholders = [usesCleartextTraffic: "true"]
         buildConfigField "boolean", "IS_NEW_ARCHITECTURE_ENABLED", "false"
         buildConfigField "boolean", "IS_HERMES_ENABLED", "true"
-        ndk {
-            abiFilters "armeabi-v7a", "arm64-v8a", "x86", "x86_64"
-        }
     }
     
     splits {

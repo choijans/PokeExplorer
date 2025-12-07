@@ -1,23 +1,24 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { StyleSheet, View, Image, Animated, TouchableOpacity, Text, PanResponder, Dimensions } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import { IconButton, Card, Chip, FAB, Portal } from 'react-native-paper';
 import { locationService, PokemonEncounter } from '../services/locationService';
 import { pokeApi } from '../services/pokeApi';
 import { socialService, Gym, Pokestop } from '../services/socialService';
 import { storageCleanup } from '../services/storageCleanup';
+import { pokemonSpawnService } from '../services/pokemonSpawnService';
 
 const TILE_SIZE = 256;
 
 export default function MapScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
   const [screenDims] = useState(() => Dimensions.get('window'));
   const SCREEN_WIDTH = screenDims.width;
   const SCREEN_HEIGHT = screenDims.height;
   const [location, setLocation] = useState<any>(null);
   const [pokemon, setPokemon] = useState<PokemonEncounter[]>([]);
   const [selectedPokemon, setSelectedPokemon] = useState<PokemonEncounter | null>(null);
-  const pokemonSpawnTimes = useRef<Map<string, number>>(new Map());
   const [zoom, setZoom] = useState(20);
   const [heading, setHeading] = useState(0);
   const [mapRotation, setMapRotation] = useState(0);
@@ -69,6 +70,19 @@ export default function MapScreen() {
     ).start();
   }, []);
 
+  const locationRef = useRef(location);
+  const capturedPokemonRef = useRef<Set<string>>(new Set());
+  
+  useEffect(() => { 
+    locationRef.current = location;
+    if (location) pokemonSpawnService.updateLocation(location);
+  }, [location]);
+
+  useEffect(() => {
+    const unsubscribe = pokemonSpawnService.subscribe(setPokemon);
+    return unsubscribe;
+  }, []);
+
   useFocusEffect(
     useCallback(() => {
       storageCleanup.clearOldData();
@@ -94,46 +108,8 @@ export default function MapScreen() {
           if (mounted && !location) {
             const defaultLoc = { latitude: 10.35168, longitude: 123.91317 };
             setLocation(defaultLoc);
-            setPokemon(locationService.generatePokemonEncounters(defaultLoc));
+            prevLocation.current = defaultLoc;
           }
-        });
-      };
-
-      const spawnPokemon = (loc: any, initial = false) => {
-        const encounters = locationService.generatePokemonEncounters(loc);
-        const now = Date.now();
-        const newPokemon: PokemonEncounter[] = [];
-        
-        encounters.forEach((p) => {
-          const key = `${p.location.latitude.toFixed(6)}-${p.location.longitude.toFixed(6)}`;
-          if (!pokemonSpawnTimes.current.has(key)) {
-            pokemonSpawnTimes.current.set(key, now + (15 * 60 * 1000));
-            newPokemon.push(p);
-          }
-        });
-        
-        if (initial) {
-          setPokemon(newPokemon);
-        } else {
-          setPokemon(prev => [...prev, ...newPokemon]);
-        }
-      };
-
-      let despawnCheckId: any;
-      const checkDespawn = () => {
-        const now = Date.now();
-        setPokemon(prev => {
-          const remaining = prev.filter((p) => {
-            const key = `${p.location.latitude.toFixed(6)}-${p.location.longitude.toFixed(6)}`;
-            const despawnTime = pokemonSpawnTimes.current.get(key);
-            if (despawnTime && despawnTime <= now) {
-              pokemonSpawnTimes.current.delete(key);
-              return false;
-            }
-            return true;
-          });
-          
-          return remaining;
         });
       };
 
@@ -146,38 +122,30 @@ export default function MapScreen() {
             if (mounted) {
               setLocation(loc);
               prevLocation.current = loc;
-              spawnPokemon(loc, true);
+              pokemonSpawnService.start(loc);
             }
           }).catch(() => {
             if (mounted) {
               const defaultLoc = { latitude: 10.35168, longitude: 123.91317 };
               setLocation(defaultLoc);
               prevLocation.current = defaultLoc;
-              spawnPokemon(defaultLoc, true);
+              pokemonSpawnService.start(defaultLoc);
             }
           });
           intervalId = setInterval(updateLocation, batterySaver ? 10000 : 2000);
-          despawnCheckId = setInterval(checkDespawn, 60000);
           countdownId = setInterval(() => {
-            const now = Date.now();
-            const newTimeMap = new Map<string, number>();
-            pokemon.forEach(p => {
-              const key = `${p.location.latitude.toFixed(6)}-${p.location.longitude.toFixed(6)}`;
-              const despawnTime = pokemonSpawnTimes.current.get(key);
-              if (despawnTime) {
-                const remaining = Math.max(0, Math.floor((despawnTime - now) / 1000));
-                newTimeMap.set(key, remaining);
-              }
-            });
-            setTimeRemaining(newTimeMap);
+            setTimeRemaining(new Map(pokemon.map(p => [
+              `${p.location.latitude.toFixed(6)}-${p.location.longitude.toFixed(6)}`,
+              pokemonSpawnService.getTimeRemaining(p)
+            ])));
           }, 1000);
         }
       });
 
       return () => {
         mounted = false;
+        pokemonSpawnService.stop();
         if (intervalId) clearInterval(intervalId);
-        if (despawnCheckId) clearInterval(despawnCheckId);
         if (countdownId) clearInterval(countdownId);
         if (watcherRef.current?.remove) {
           watcherRef.current.remove();
@@ -217,7 +185,7 @@ export default function MapScreen() {
     const centerX = lonToX(location.longitude) - manualOffset.x;
     const centerY = latToY(location.latitude) - manualOffset.y;
     return { x: centerX, y: centerY };
-  }, [location, lonToX, latToY, manualOffset]);
+  }, [location, manualOffset, lonToX, latToY]);
 
   const tiles = useMemo(() => {
     if (!location) return [];
@@ -276,10 +244,13 @@ export default function MapScreen() {
     });
   }, [location, mapOffset, pokestops, lonToX, latToY]);
 
-  const pokemonMarkers = useMemo(() => {
+  console.log('[MAPSCREEN] RENDER - Pokemon count:', pokemon.length, pokemon.map(p => p.id));
+  
+  const renderPokemonMarkers = () => {
+    console.log('[MAPSCREEN] renderPokemonMarkers - Pokemon:', pokemon.length);
     if (!location) return null;
-
-    return pokemon.map((p, i) => {
+    
+    return pokemon.map((p) => {
       const pokemonX = lonToX(p.location.longitude);
       const pokemonY = latToY(p.location.latitude);
       const left = pokemonX - mapOffset.x + SCREEN_WIDTH / 2 - 25;
@@ -288,10 +259,13 @@ export default function MapScreen() {
       const distance = locationService.calculateDistance(location, p.location);
       const isNearby = distance < 100;
       const spriteUrl = `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${p.id}.png`;
+      const key = `${p.id}-${p.location.latitude.toFixed(6)}-${p.location.longitude.toFixed(6)}`;
+
+      console.log('[MAPSCREEN] Rendering Pokemon', p.id, 'at', left, top);
 
       return (
         <TouchableOpacity
-          key={i}
+          key={key}
           style={[styles.pokemonMarker, { left, top }]}
           onPress={() => setSelectedPokemon(p)}
         >
@@ -308,7 +282,7 @@ export default function MapScreen() {
         </TouchableOpacity>
       );
     });
-  }, [location, mapOffset, pokemon, lonToX, latToY, pulseAnim, getBiomeColor]);
+  };
 
   const handleCapture = async () => {
     if (selectedPokemon && location) {
@@ -316,9 +290,9 @@ export default function MapScreen() {
       if (distance < 100) {
         try {
           const pokemonData = await pokeApi.getPokemon(selectedPokemon.id);
-          navigation.navigate('ARCapture', { pokemon: pokemonData, biome: selectedPokemon.biome });
-          setPokemon(prev => prev.filter(p => p.id !== selectedPokemon.id));
+          pokemonSpawnService.removePokemon(selectedPokemon);
           setSelectedPokemon(null);
+          navigation.navigate('ARCapture', { pokemon: pokemonData, biome: selectedPokemon.biome });
         } catch (error) {
           console.error('Failed to fetch pokemon:', error);
         }
@@ -427,7 +401,7 @@ export default function MapScreen() {
         {tiles}
         {gymMarkers}
         {pokestopMarkers}
-        {pokemonMarkers}
+        {renderPokemonMarkers()}
         <View style={styles.playerMarker}>
           <Animated.View style={[styles.playerRing, { transform: [{ scale: playerPulse }] }]} />
           <Animated.View style={[styles.playerDot, { transform: [{ rotate: `${heading}deg` }] }]}>

@@ -135,17 +135,19 @@ class LocationService {
   }
 
   private getPokemonIdForBiome(biome: string, rarity: string): number {
-    const biomePokemons: { [key: string]: number[] } = {
-      water: [7, 8, 9, 54, 55, 72, 73, 90, 91, 98, 99, 116, 117, 118, 119, 120, 121, 129, 130, 131, 134],
-      grass: [1, 2, 3, 25, 43, 44, 45, 46, 47, 69, 70, 71, 102, 103, 114, 123, 127],
-      urban: [19, 20, 52, 53, 74, 75, 76, 81, 82, 100, 101, 109, 110, 132],
-      normal: [4, 5, 6, 10, 11, 12, 13, 14, 15, 16, 17, 18, 21, 22, 23, 24],
-    };
+    const roll = Math.random();
+    let maxId;
     
-    let pokemonList = biomePokemons[biome] || biomePokemons.normal;
-    if (rarity === 'legendary') pokemonList = [150, 151, 144, 145, 146];
-    else if (rarity === 'rare') pokemonList = pokemonList.filter(id => id > 100);
-    return pokemonList[Math.floor(Math.random() * pokemonList.length)];
+    if (rarity === 'legendary') {
+      const legendaries = [150, 151, 144, 145, 146, 243, 244, 245, 249, 250, 251, 377, 378, 379, 380, 381, 382, 383, 384, 385, 386];
+      return legendaries[Math.floor(Math.random() * legendaries.length)];
+    }
+    
+    if (roll < 0.6) maxId = 151;
+    else if (roll < 0.85) maxId = 251;
+    else maxId = 386;
+    
+    return Math.floor(Math.random() * maxId) + 1;
   }
 
   private generateNearbyLocation(center: Location): Location {
