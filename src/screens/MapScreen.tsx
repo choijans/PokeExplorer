@@ -1,18 +1,23 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { StyleSheet, View, Image, Animated, TouchableOpacity, Text, PanResponder, Dimensions } from 'react-native';
+import { StyleSheet, View, Image, Animated, TouchableOpacity, Text, PanResponder, Dimensions, ToastAndroid, Platform } from 'react-native';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
-import { IconButton, Card, Chip, FAB, Portal } from 'react-native-paper';
+import { IconButton, Card, Chip, FAB, Portal, Snackbar } from 'react-native-paper';
 import { locationService, PokemonEncounter } from '../services/locationService';
 import { pokeApi } from '../services/pokeApi';
 import { socialService, Gym, Pokestop } from '../services/socialService';
 import { storageCleanup } from '../services/storageCleanup';
 import { pokemonSpawnService } from '../services/pokemonSpawnService';
+import { shopService, Shop } from '../services/shopService';
+import ShopModal from '../components/ShopModal';
+import { notificationService } from '../services/notificationService';
+import { useAuth } from '../contexts/AuthContext';
 
 const TILE_SIZE = 256;
 
 export default function MapScreen() {
   const navigation = useNavigation();
   const route = useRoute();
+  const { user } = useAuth();
   const [screenDims] = useState(() => Dimensions.get('window'));
   const SCREEN_WIDTH = screenDims.width;
   const SCREEN_HEIGHT = screenDims.height;
@@ -31,9 +36,15 @@ export default function MapScreen() {
   const [pokestops, setPokestops] = useState<Pokestop[]>([]);
   const [selectedGym, setSelectedGym] = useState<Gym | null>(null);
   const [selectedPokestop, setSelectedPokestop] = useState<Pokestop | null>(null);
+  const [spawnNotification, setSpawnNotification] = useState<string>('');
+  const [newSpawns, setNewSpawns] = useState<Set<string>>(new Set());
+  const [shop, setShop] = useState<Shop | null>(null);
+  const [shopVisible, setShopVisible] = useState(false);
+  const shopIntervalRef = useRef<any>(null);
   const nearbyHeight = useRef(new Animated.Value(60)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const playerPulse = useRef(new Animated.Value(1)).current;
+  const spawnAnimations = useRef<Map<string, Animated.Value>>(new Map());
   const watcherRef = useRef<any>(null);
   const tileCache = useRef<Map<string, string>>(new Map());
   const prevLocation = useRef<any>(null);
@@ -80,12 +91,52 @@ export default function MapScreen() {
 
   useEffect(() => {
     const unsubscribe = pokemonSpawnService.subscribe(setPokemon);
-    return unsubscribe;
-  }, []);
+    const unsubscribeNotif = pokemonSpawnService.subscribeToNotifications((pokemon) => {
+      if (location) {
+        const distance = locationService.calculateDistance(location, pokemon.location);
+        if (distance < 500 && (pokemon.rarity === 'rare' || pokemon.rarity === 'legendary')) {
+          notificationService.showRarePokemonNotification(`Pokemon #${pokemon.id}`, distance);
+        }
+        const key = `${pokemon.location.latitude.toFixed(6)}-${pokemon.location.longitude.toFixed(6)}`;
+        setNewSpawns(prev => new Set(prev).add(key));
+        const anim = new Animated.Value(0);
+        spawnAnimations.current.set(key, anim);
+        Animated.sequence([
+          Animated.timing(anim, { toValue: 1, duration: 500, useNativeDriver: true }),
+          Animated.delay(2000),
+          Animated.timing(anim, { toValue: 0, duration: 300, useNativeDriver: true }),
+        ]).start(() => {
+          setNewSpawns(prev => {
+            const next = new Set(prev);
+            next.delete(key);
+            return next;
+          });
+          spawnAnimations.current.delete(key);
+        });
+      }
+    });
+    return () => {
+      unsubscribe();
+      unsubscribeNotif();
+    };
+  }, [location]);
 
   useFocusEffect(
     useCallback(() => {
       storageCleanup.clearOldData();
+      notificationService.requestPermission();
+      
+      const newShop = shopService.generateShop();
+      setShop(newShop);
+      notificationService.scheduleShopRefreshNotification(300000);
+      
+      shopIntervalRef.current = setInterval(async () => {
+        const refreshedShop = shopService.generateShop();
+        setShop(refreshedShop);
+        await notificationService.showShopRefreshNotification();
+        await notificationService.scheduleShopRefreshNotification(300000);
+      }, 300000);
+      
       let mounted = true;
       let intervalId: any;
       let countdownId: any;
@@ -147,6 +198,7 @@ export default function MapScreen() {
         pokemonSpawnService.stop();
         if (intervalId) clearInterval(intervalId);
         if (countdownId) clearInterval(countdownId);
+        if (shopIntervalRef.current) clearInterval(shopIntervalRef.current);
         if (watcherRef.current?.remove) {
           watcherRef.current.remove();
         }
@@ -263,6 +315,10 @@ export default function MapScreen() {
 
       console.log('[MAPSCREEN] Rendering Pokemon', p.id, 'at', left, top);
 
+      const spawnKey = `${p.location.latitude.toFixed(6)}-${p.location.longitude.toFixed(6)}`;
+      const isNewSpawn = newSpawns.has(spawnKey);
+      const spawnAnim = spawnAnimations.current.get(spawnKey);
+
       return (
         <TouchableOpacity
           key={key}
@@ -278,7 +334,20 @@ export default function MapScreen() {
               },
             ]}
           />
-          <Image source={{ uri: spriteUrl }} style={styles.pokemonSprite} />
+          {isNewSpawn && spawnAnim && (
+            <Animated.View
+              style={[
+                styles.spawnRing,
+                {
+                  opacity: spawnAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 1, 0] }),
+                  transform: [{ scale: spawnAnim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 2] }) }],
+                },
+              ]}
+            />
+          )}
+          <Animated.View style={{ opacity: spawnAnim || 1, transform: [{ scale: spawnAnim?.interpolate({ inputRange: [0, 1], outputRange: [0, 1] }) || 1 }] }}>
+            <Image source={{ uri: spriteUrl }} style={styles.pokemonSprite} />
+          </Animated.View>
         </TouchableOpacity>
       );
     });
@@ -366,6 +435,7 @@ export default function MapScreen() {
     playerRing: { position: 'absolute', width: 40, height: 40, borderRadius: 20, borderWidth: 3, borderColor: '#4169E1', opacity: 0.4 },
     pokemonMarker: { position: 'absolute', width: 50, height: 50, justifyContent: 'center', alignItems: 'center' },
     pokemonPulse: { position: 'absolute', width: 50, height: 50, borderRadius: 25 },
+    spawnRing: { position: 'absolute', width: 80, height: 80, borderRadius: 40, borderWidth: 3, borderColor: '#FFD700', top: -15, left: -15 },
     pokemonSprite: { width: 40, height: 40, zIndex: 2 },
     card: { position: 'absolute', bottom: 80, left: 20, right: 20, elevation: 8 },
     nearbyCard: { position: 'absolute', top: 50, left: 15, right: 15, maxHeight: 300, elevation: 8 },
@@ -420,6 +490,7 @@ export default function MapScreen() {
           style={[styles.fab, batterySaver && styles.fabActive]} 
           onPress={() => setBatterySaver(!batterySaver)} 
         />
+        {user && <FAB icon="store" size="small" style={styles.fab} onPress={() => setShopVisible(true)} />}
       </View>
 
       <View style={styles.moveControls}>
@@ -507,6 +578,16 @@ export default function MapScreen() {
           );
         })}
       </Card>
+
+      {user && shop && (
+        <ShopModal
+          visible={shopVisible}
+          shop={shop}
+          userId={user.uid}
+          onClose={() => setShopVisible(false)}
+          onPurchase={(updatedShop) => setShop(updatedShop)}
+        />
+      )}
     </View>
   );
 }

@@ -20,6 +20,9 @@ import { inventoryService, InventoryItem } from '../services/inventoryService';
 import { firebaseDiscoveryService } from '../services/firebaseDiscoveryService';
 import { firebaseInventoryService } from '../services/firebaseInventoryService';
 import { pokemonInstanceService } from '../services/pokemonInstanceService';
+import { levelService } from '../services/levelService';
+import { catchHistoryService } from '../services/catchHistoryService';
+import { firebaseCatchHistoryService } from '../services/firebaseCatchHistoryService';
 import { useAuth } from '../contexts/AuthContext';
 
 const { width, height } = Dimensions.get('window');
@@ -43,22 +46,30 @@ const ARCaptureScreen: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'capture' | 'items'>('capture');
   const [showMinigame, setShowMinigame] = useState(false);
   const [captureProgress, setCaptureProgress] = useState(0);
-  const [sweetSpotPos, setSweetSpotPos] = useState(50);
   const [announceText, setAnnounceText] = useState('');
   const [showThrowButton, setShowThrowButton] = useState(true);
-  const [isHolding, setIsHolding] = useState(false);
-  const isHoldingRef = useRef(false);
   const [rarity, setRarity] = useState<'common'|'uncommon'|'rare'|'epic'|'legendary'>('common');
   const [minigameReady, setMinigameReady] = useState(false);
-  const indicatorPosRef = useRef(50);
-  const velocityRef = useRef(0);
+  const [catchQuality, setCatchQuality] = useState<'Nice'|'Great'|'Excellent'|null>(null);
+  const isHoldingRef = useRef(false);
+  const tensionSamplesRef = useRef<number[]>([]);
+  const timeInZoneRef = useRef(0);
+  const totalTimeRef = useRef(0);
+  const captureZonePosRef = useRef(50);
+  const captureZoneVelocityRef = useRef(0);
+  const pokemonPosRef = useRef(50);
+  const pokemonVelocityRef = useRef(0);
+  const pokemonTargetRef = useRef(50);
+  const progressRef = useRef(0);
+  const intervalRef = useRef<any>(null);
   
   const device = useCameraDevice('back');
   const bounceAnim = useRef(new Animated.Value(0)).current;
   const shakeAnim = useRef(new Animated.Value(0)).current;
   const circleAnim = useRef(new Animated.Value(1)).current;
   const breatheAnim = useRef(new Animated.Value(0)).current;
-  const minigameIndicator = useRef(new Animated.Value(50)).current;
+  const captureZoneAnim = useRef(new Animated.Value(50)).current;
+  const pokemonAnim = useRef(new Animated.Value(50)).current;
   const progressAnim = useRef(new Animated.Value(0)).current;
   const throwButtonGlow = useRef(new Animated.Value(0)).current;
   const dimAnim = useRef(new Animated.Value(0)).current;
@@ -72,8 +83,6 @@ const ARCaptureScreen: React.FC = () => {
         const status = await Camera.requestCameraPermission();
         setHasPermission(status === 'granted');
       }
-      const inv = user ? await firebaseInventoryService.getInventory(user.uid) : await inventoryService.getInventory();
-      setInventory(inv);
       setRarity(calculateRarity(pokemon));
     })();
 
@@ -98,23 +107,35 @@ const ARCaptureScreen: React.FC = () => {
     ])).start();
   }, []);
 
+  useEffect(() => {
+    if (user) {
+      const unsubscribe = firebaseInventoryService.subscribeToInventory(user.uid, setInventory);
+      return unsubscribe;
+    } else {
+      inventoryService.getInventory().then(setInventory);
+    }
+  }, [user]);
+
   const useBerry = async (berryType: string) => {
     const success = user ? await firebaseInventoryService.useItem(user.uid, berryType) : await inventoryService.useItem(berryType);
     if (!success) return;
     
     setSelectedBerry(berryType);
     setBerryActive(true);
-    setAnnounceText(`You used a ${inventory.find(i => i.id === berryType)?.name}!\nThe wild Pokémon is calmer now.`);
-    const inv = user ? await firebaseInventoryService.getInventory(user.uid) : await inventoryService.getInventory();
-    setInventory(inv);
+    const berryName = inventory.find(i => i.id === berryType)?.name || 'Berry';
+    const berryEffects: Record<string, string> = {
+      razz: 'easier to catch',
+      nanab: 'calmer',
+      pinap: 'more candy',
+      goldenrazz: 'much easier to catch',
+      silverpinap: 'easier + more candy',
+    };
+    setAnnounceText(`You used a ${berryName}!\nThe wild Pokémon is ${berryEffects[berryType] || 'affected'}.`);
   };
 
   const handleThrow = async () => {
     const canUse = user ? await firebaseInventoryService.useItem(user.uid, selectedBall) : await inventoryService.useItem(selectedBall);
     if (!canUse) { alert('No Poké Balls left!'); return; }
-    
-    const inv = user ? await firebaseInventoryService.getInventory(user.uid) : await inventoryService.getInventory();
-    setInventory(inv);
     
     setAnnounceText(`You threw a ${inventory.find(i => i.id === selectedBall)?.name}!`);
     setCatching(true);
@@ -139,86 +160,138 @@ const ARCaptureScreen: React.FC = () => {
 
   const startMinigame = () => {
     const config = getBallConfig(selectedBall);
-    setSweetSpotPos(50);
-    indicatorPosRef.current = 50;
-    velocityRef.current = 0;
-    minigameIndicator.setValue(50);
-    setCaptureProgress(0);
-    progressAnim.setValue(0);
+    captureZonePosRef.current = 50;
+    captureZoneVelocityRef.current = 0;
+    pokemonPosRef.current = 50;
+    pokemonVelocityRef.current = 0;
+    pokemonTargetRef.current = 50;
+    progressRef.current = 20;
+    captureZoneAnim.setValue(50);
+    pokemonAnim.setValue(50);
+    setCaptureProgress(20);
+    progressAnim.setValue(20);
     setMinigameReady(false);
     setAnnounceText('GET READY...');
+    tensionSamplesRef.current = [];
+    timeInZoneRef.current = 0;
+    totalTimeRef.current = 0;
     
     setTimeout(() => {
       setMinigameReady(true);
       setAnnounceText('');
+      startGameLoop();
     }, 1000);
-    
-    let progress = 0;
-    let sweetPos = 50;
-    let sweetDirection = 1;
-    const rarityDrainSpeed = getRarityDrainSpeed(rarity);
-    
-    const interval = setInterval(() => {
-      const distance = Math.abs(indicatorPosRef.current - sweetPos);
-      const inZone = distance < config.sweetSpotSize / 2;
-      
-      if (inZone) {
-        progress += config.fillSpeed;
-      } else {
-        progress -= rarityDrainSpeed;
-      }
-      
-      progress = Math.max(0, Math.min(100, progress));
-      setCaptureProgress(progress);
-      progressAnim.setValue(progress);
-      
-      if (Math.random() < 0.015) {
-        sweetDirection = Math.random() > 0.5 ? 1 : -1;
-      }
-      sweetPos += sweetDirection * config.sweetSpotSpeed;
-      if (sweetPos < 20) { sweetPos = 20; sweetDirection = 1; }
-      if (sweetPos > 80) { sweetPos = 80; sweetDirection = -1; }
-      setSweetSpotPos(sweetPos);
-      
-      if (progress >= 100) {
-        clearInterval(interval);
-        handleCaptureSuccess();
-      } else if (progress <= 0) {
-        clearInterval(interval);
-        handleCaptureFailure();
-      }
-    }, 33);
   };
 
-  const handleHoldStart = () => { 
-    if (minigameReady) {
-      isHoldingRef.current = true;
+  const startGameLoop = () => {
+    const config = getBallConfig(selectedBall);
+    let rarityDrainSpeed = getRarityDrainSpeed(rarity);
+    let rarityMovement = getRarityMovement(rarity);
+    
+    // Apply berry effects
+    if (selectedBerry === 'razz' || selectedBerry === 'goldenrazz') {
+      const bonus = selectedBerry === 'goldenrazz' ? 0.4 : 0.2;
+      config.fillSpeed += bonus;
     }
-  };
-  const handleHoldEnd = () => {
-    isHoldingRef.current = false;
+    if (selectedBerry === 'nanab') {
+      rarityMovement.acceleration *= 0.6;
+      rarityMovement.changeInterval *= 1.5;
+    }
+    
+    let lastTargetChange = Date.now();
+    let frameCount = 0;
+    
+    const loop = () => {
+      if (!intervalRef.current) return;
+      
+      frameCount++;
+      const now = Date.now();
+      
+      // Pokemon AI - rarity affects movement
+      if (now - lastTargetChange > rarityMovement.changeInterval) {
+        pokemonTargetRef.current = 20 + Math.random() * 60;
+        lastTargetChange = now;
+      }
+      
+      const targetDiff = pokemonTargetRef.current - pokemonPosRef.current;
+      pokemonVelocityRef.current += targetDiff * rarityMovement.acceleration;
+      pokemonVelocityRef.current *= rarityMovement.friction;
+      pokemonPosRef.current += pokemonVelocityRef.current;
+      pokemonPosRef.current = Math.max(10, Math.min(90, pokemonPosRef.current));
+      
+      // Zone movement with acceleration (slower)
+      if (isHoldingRef.current) {
+        captureZoneVelocityRef.current += 0.08;
+        captureZoneVelocityRef.current = Math.min(1.2, captureZoneVelocityRef.current);
+      } else {
+        captureZoneVelocityRef.current -= 0.08;
+        captureZoneVelocityRef.current = Math.max(-1.2, captureZoneVelocityRef.current);
+      }
+      
+      captureZonePosRef.current += captureZoneVelocityRef.current;
+      captureZonePosRef.current = Math.max(10, Math.min(90, captureZonePosRef.current));
+      
+      // Animations
+      pokemonAnim.setValue(pokemonPosRef.current);
+      captureZoneAnim.setValue(captureZonePosRef.current);
+      
+      // Collision
+      const zoneLeft = captureZonePosRef.current - config.sweetSpotSize / 2;
+      const zoneRight = captureZonePosRef.current + config.sweetSpotSize / 2;
+      const inZone = pokemonPosRef.current >= zoneLeft && pokemonPosRef.current <= zoneRight;
+      
+      progressRef.current += inZone ? config.fillSpeed : -rarityDrainSpeed;
+      progressRef.current = Math.max(0, Math.min(100, progressRef.current));
+      
+      // Track quality metrics
+      totalTimeRef.current++;
+      if (inZone) timeInZoneRef.current++;
+      tensionSamplesRef.current.push(progressRef.current);
+      
+      // Update UI less frequently
+      if (frameCount % 15 === 0) {
+        setCaptureProgress(Math.floor(progressRef.current));
+        progressAnim.setValue(progressRef.current);
+      }
+      
+      // Win/lose
+      if (progressRef.current >= 100) {
+        intervalRef.current = null;
+        handleCaptureSuccess();
+        return;
+      } else if (progressRef.current <= 0) {
+        intervalRef.current = null;
+        handleCaptureFailure();
+        return;
+      }
+      
+      intervalRef.current = requestAnimationFrame(loop);
+    };
+    
+    intervalRef.current = requestAnimationFrame(loop);
   };
 
   useEffect(() => {
-    if (showMinigame && minigameReady) {
-      const movement = setInterval(() => {
-        if (isHoldingRef.current) {
-          velocityRef.current = Math.min(3.0, velocityRef.current + 0.3);
-        } else {
-          velocityRef.current = Math.max(-3.0, velocityRef.current - 0.3);
-        }
-        
-        velocityRef.current *= 0.88;
-        const newPos = indicatorPosRef.current + velocityRef.current;
-        indicatorPosRef.current = Math.max(2, Math.min(98, newPos));
-        minigameIndicator.setValue(indicatorPosRef.current);
-      }, 16);
-      return () => clearInterval(movement);
-    }
-  }, [showMinigame, minigameReady]);
+    return () => {
+      if (intervalRef.current) {
+        cancelAnimationFrame(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, []);
 
   const handleCaptureSuccess = async () => {
     setShowMinigame(false);
+    
+    const timeInZonePct = (timeInZoneRef.current / totalTimeRef.current) * 100;
+    const avgTension = tensionSamplesRef.current.reduce((a, b) => a + b, 0) / tensionSamplesRef.current.length;
+    const qualityScore = (timeInZonePct * 0.6) + (avgTension * 0.4);
+    
+    let quality: 'Nice'|'Great'|'Excellent' = 'Nice';
+    if (qualityScore >= 75) quality = 'Excellent';
+    else if (qualityScore >= 50) quality = 'Great';
+    setCatchQuality(quality);
+    
     Animated.sequence([
       Animated.timing(shakeAnim, { toValue: 20, duration: 200, useNativeDriver: true }),
       Animated.timing(shakeAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
@@ -226,16 +299,48 @@ const ARCaptureScreen: React.FC = () => {
     Animated.timing(dimAnim, { toValue: 0, duration: 500, useNativeDriver: false }).start();
     
     setTimeout(async () => {
-      const xp = Math.floor(100 + captureProgress * 2 + (berryActive ? 25 : 0));
-      const candy = Math.floor(Math.random() * 3) + 3;
+      const qualityBonus = quality === 'Excellent' ? 100 : quality === 'Great' ? 50 : 25;
+      const baseXP = 100;
+      const xp = baseXP + qualityBonus + (berryActive ? 10 : 0);
+      let candy = Math.floor(Math.random() * 3) + 3;
+      
+      // Apply candy multiplier from berries
+      if (selectedBerry === 'pinap') candy *= 2;
+      if (selectedBerry === 'silverpinap') candy = Math.floor(candy * 1.5);
       setXpGained(xp);
       setCandyGained(candy);
       
       if (user) {
         const instance = await pokemonInstanceService.saveCaughtPokemon(user.uid, pokemon, rarity);
         await firebaseDiscoveryService.addCapturedPokemon(user.uid, pokemon, undefined, biome);
+        const levelResult = await levelService.addXP(user.uid, xp);
+        
+        if (levelResult.leveledUp) {
+          setTimeout(() => {
+            alert(`🎉 Level Up!\n\nYou reached Level ${levelResult.newLevel}!`);
+          }, 2000);
+        }
       } else {
         await discoveryService.addDiscoveredPokemon(pokemon, undefined, biome);
+      }
+      
+      const historyEntry = {
+        pokemonId: pokemon.id,
+        pokemonName: pokemon.name,
+        timestamp: Date.now(),
+        result: 'caught' as const,
+        location: { latitude: 0, longitude: 0 },
+        biome,
+        rarity,
+        ballUsed: selectedBall,
+        xpGained: xp,
+        candyGained: candy,
+      };
+      
+      if (user) {
+        await firebaseCatchHistoryService.addEntry(user.uid, historyEntry);
+      } else {
+        await catchHistoryService.addEntry(historyEntry);
       }
       
       setCaught(true);
@@ -245,25 +350,36 @@ const ARCaptureScreen: React.FC = () => {
     }, 500);
   };
 
-  const handleCaptureFailure = () => {
+  const handleCaptureFailure = async () => {
     setShowMinigame(false);
     Animated.sequence([
       Animated.timing(shakeAnim, { toValue: 30, duration: 100, useNativeDriver: true }),
       Animated.timing(shakeAnim, { toValue: -30, duration: 100, useNativeDriver: true }),
       Animated.timing(shakeAnim, { toValue: 0, duration: 100, useNativeDriver: true }),
     ]).start();
-    setAnnounceText('Oh no! The Pokémon broke free!');
+    setAnnounceText('The Pokémon broke free and fled!');
     Animated.timing(dimAnim, { toValue: 0, duration: 300, useNativeDriver: false }).start();
     
+    const historyEntry = {
+      pokemonId: pokemon.id,
+      pokemonName: pokemon.name,
+      timestamp: Date.now(),
+      result: 'fled' as const,
+      location: { latitude: 0, longitude: 0 },
+      biome,
+      rarity,
+      ballUsed: selectedBall,
+    };
+    
+    if (user) {
+      await firebaseCatchHistoryService.addEntry(user.uid, historyEntry);
+    } else {
+      await catchHistoryService.addEntry(historyEntry);
+    }
+    
     setTimeout(() => {
-      const escapeChance = Math.random();
-      if (escapeChance < 0.3) {
-        setEscaped(true);
-        setTimeout(() => navigation.goBack(), 1500);
-      } else {
-        setCatching(false);
-        setAnnounceText('');
-      }
+      setEscaped(true);
+      setTimeout(() => navigation.goBack(), 1500);
     }, 1000);
   };
 
@@ -288,9 +404,10 @@ const ARCaptureScreen: React.FC = () => {
 
   const getBallConfig = (ballId: string) => {
     const configs: Record<string, any> = {
-      pokeball: { sweetSpotSize: 18, fillSpeed: 0.9, sweetSpotSpeed: 0.6, color: '#FF5252', barWidth: 20 },
-      greatball: { sweetSpotSize: 22, fillSpeed: 1.4, sweetSpotSpeed: 0.45, color: '#2196F3', barWidth: 28 },
-      ultraball: { sweetSpotSize: 26, fillSpeed: 2.0, sweetSpotSpeed: 0.3, color: '#FFD700', barWidth: 36 },
+      pokeball: { sweetSpotSize: 18, fillSpeed: 0.4, color: '#FF5252', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png' },
+      greatball: { sweetSpotSize: 22, fillSpeed: 0.6, color: '#2196F3', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/great-ball.png' },
+      ultraball: { sweetSpotSize: 26, fillSpeed: 0.8, color: '#FFD700', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/ultra-ball.png' },
+      masterball: { sweetSpotSize: 100, fillSpeed: 5.0, color: '#9C27B0', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/master-ball.png' },
     };
     return configs[ballId] || configs.pokeball;
   };
@@ -301,8 +418,19 @@ const ARCaptureScreen: React.FC = () => {
   };
 
   const getRarityDrainSpeed = (rarity: 'common'|'uncommon'|'rare'|'epic'|'legendary') => {
-    const drainSpeeds = { common: 0.20, uncommon: 0.16, rare: 0.12, epic: 0.08, legendary: 0.05 };
+    const drainSpeeds = { common: 0.25, uncommon: 0.22, rare: 0.18, epic: 0.15, legendary: 0.12 };
     return drainSpeeds[rarity];
+  };
+
+  const getRarityMovement = (rarity: 'common'|'uncommon'|'rare'|'epic'|'legendary') => {
+    const movements = {
+      common: { changeInterval: 1500 + Math.random() * 1000, acceleration: 0.012, friction: 0.90 },
+      uncommon: { changeInterval: 1200 + Math.random() * 800, acceleration: 0.015, friction: 0.88 },
+      rare: { changeInterval: 1000 + Math.random() * 600, acceleration: 0.018, friction: 0.86 },
+      epic: { changeInterval: 800 + Math.random() * 400, acceleration: 0.022, friction: 0.84 },
+      legendary: { changeInterval: 600 + Math.random() * 300, acceleration: 0.028, friction: 0.82 },
+    };
+    return movements[rarity];
   };
 
   const imageUrl = pokemon.sprites.other?.['official-artwork']?.front_default || pokemon.sprites.front_default;
@@ -341,9 +469,9 @@ const ARCaptureScreen: React.FC = () => {
       {showMinigame && (
         <View 
           onStartShouldSetResponder={() => true}
-          onResponderGrant={handleHoldStart}
-          onResponderRelease={handleHoldEnd}
-          onResponderTerminate={handleHoldEnd}
+          onResponderGrant={() => { if (minigameReady) isHoldingRef.current = true; }}
+          onResponderRelease={() => { isHoldingRef.current = false; }}
+          onResponderTerminate={() => { isHoldingRef.current = false; }}
           style={styles.minigameOverlay}
         >
           <View style={styles.fishMinigameContainer} pointerEvents="box-none">
@@ -352,15 +480,14 @@ const ARCaptureScreen: React.FC = () => {
             </View>
             <View style={styles.tensionBarContainer}>
               <View style={styles.tensionBarHorizontal}>
-                <Animated.View style={[styles.sweetSpotHorizontal, { 
-                  left: `${sweetSpotPos - getBallConfig(selectedBall).sweetSpotSize / 2}%`, 
+                <Animated.View style={[styles.captureZone, { 
+                  left: captureZoneAnim.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }),
                   width: `${getBallConfig(selectedBall).sweetSpotSize}%`,
                   backgroundColor: getBallConfig(selectedBall).color,
+                  transform: [{ translateX: -getBallConfig(selectedBall).sweetSpotSize / 2 }]
                 }]} />
-                <Animated.View style={[styles.indicatorHorizontal, { 
-                  left: minigameIndicator.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }),
-                  width: getBallConfig(selectedBall).barWidth,
-                  backgroundColor: getBallConfig(selectedBall).color,
+                <Animated.View style={[styles.pokemonIndicator, { 
+                  left: pokemonAnim.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }),
                 }]} />
               </View>
             </View>
@@ -374,8 +501,8 @@ const ARCaptureScreen: React.FC = () => {
               <Text style={styles.progressText}>{Math.floor(captureProgress)}%</Text>
             </View>
             <View style={styles.hintBox}>
-              <Text style={styles.fishHint}>HOLD to move right!</Text>
-              <Text style={styles.drainSpeedText}>Drain: -{getRarityDrainSpeed(rarity).toFixed(2)}/tick ({getRarityLabel()})</Text>
+              <Text style={styles.fishHint}>HOLD to move zone RIGHT!</Text>
+              <Text style={styles.drainSpeedText}>{getRarityLabel()} • Drain: -{getRarityDrainSpeed(rarity).toFixed(2)}/tick</Text>
             </View>
           </View>
         </View>
@@ -398,14 +525,21 @@ const ARCaptureScreen: React.FC = () => {
             <View style={styles.capturePanel}>
               <Text style={styles.sectionTitle}>SELECT POKÉ BALL</Text>
               <View style={styles.ballGrid}>
-                {inventory.filter(i => i.type.includes('ball')).map(item => (
-                  <TouchableOpacity key={item.id} style={[styles.ballCard, selectedBall === item.id && styles.ballCardSelected]} onPress={() => setSelectedBall(item.id)} disabled={item.count === 0}>
-                    <Text style={styles.ballIcon}>{item.icon}</Text>
-                    <Text style={styles.ballName}>{item.name}</Text>
-                    <Text style={styles.ballLabel}>{getBallLabel(item.id)}</Text>
-                    <Text style={styles.ballCount}>x{item.count}</Text>
-                  </TouchableOpacity>
-                ))}
+                {inventory.filter(i => i.type.includes('ball')).map(item => {
+                  const ballConfig = getBallConfig(item.id);
+                  return (
+                    <TouchableOpacity key={item.id} style={[styles.ballCard, selectedBall === item.id && styles.ballCardSelected]} onPress={() => setSelectedBall(item.id)} disabled={item.count === 0}>
+                      {ballConfig.sprite ? (
+                        <Image source={{ uri: ballConfig.sprite }} style={styles.ballSprite} />
+                      ) : (
+                        <Text style={styles.ballIcon}>{item.icon}</Text>
+                      )}
+                      <Text style={styles.ballName}>{item.name}</Text>
+                      <Text style={styles.ballLabel}>{getBallLabel(item.id)}</Text>
+                      <Text style={styles.ballCount}>x{item.count}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
               {showThrowButton && (
                 <Animated.View style={[styles.throwButtonContainer, { opacity: throwButtonGlow.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) }]}>
@@ -419,21 +553,34 @@ const ARCaptureScreen: React.FC = () => {
             <View style={styles.itemsPanel}>
               <Text style={styles.sectionTitle}>USE BERRY</Text>
               <View style={styles.berryGrid}>
-                {inventory.filter(i => i.type.includes('razz') || i.type.includes('nanab')).map(item => (
-                  <TouchableOpacity key={item.id} style={[styles.berryCard, selectedBerry === item.id && styles.berryCardActive]} onPress={() => useBerry(item.id)} disabled={berryActive || item.count === 0}>
-                    <Text style={styles.berryIcon}>{item.icon}</Text>
-                    <Text style={styles.berryName}>{item.name}</Text>
-                    <Text style={styles.berryEffect}>{getBerryEffect(item.id)}</Text>
-                    <Text style={styles.berryCount}>x{item.count}</Text>
-                  </TouchableOpacity>
-                ))}
+                {inventory.filter(i => i.type.includes('razz') || i.type.includes('nanab') || i.type.includes('pinap')).map(item => {
+                  const berrySprites: Record<string, string> = {
+                    razz: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/razz-berry.png',
+                    nanab: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/nanab-berry.png',
+                    pinap: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/pinap-berry.png',
+                    goldenrazz: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/golden-razz-berry.png',
+                    silverpinap: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/silver-pinap-berry.png',
+                  };
+                  return (
+                    <TouchableOpacity key={item.id} style={[styles.berryCard, selectedBerry === item.id && styles.berryCardActive]} onPress={() => useBerry(item.id)} disabled={berryActive || item.count === 0}>
+                      {berrySprites[item.id] ? (
+                        <Image source={{ uri: berrySprites[item.id] }} style={styles.berrySprite} />
+                      ) : (
+                        <Text style={styles.berryIcon}>{item.icon}</Text>
+                      )}
+                      <Text style={styles.berryName}>{item.name}</Text>
+                      <Text style={styles.berryEffect}>{getBerryEffect(item.id)}</Text>
+                      <Text style={styles.berryCount}>x{item.count}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </View>
           )}
         </View>
       )}
 
-      {caught && <View style={styles.statusSurface}><Text style={styles.successText}>Gotcha!</Text><Text style={styles.successSubtext}>{pokemon.name.charAt(0).toUpperCase() + pokemon.name.slice(1)} was caught!</Text><Text style={styles.rewardText}>+{xpGained} XP  •  +{candyGained} Candy</Text></View>}
+      {caught && <View style={styles.statusSurface}><Text style={styles.successText}>Gotcha!</Text><Text style={styles.successSubtext}>{pokemon.name.charAt(0).toUpperCase() + pokemon.name.slice(1)} was caught!</Text>{catchQuality && <Text style={styles.qualityBadge}>{catchQuality}!</Text>}<Text style={styles.rewardText}>+{xpGained} XP  •  +{candyGained} Candy</Text></View>}
       {escaped && <View style={styles.statusSurface}><Text style={styles.escapeText}>Oh no! The wild {pokemon.name.charAt(0).toUpperCase() + pokemon.name.slice(1)} fled!</Text></View>}
 
       <IconButton icon="arrow-left" mode="contained" onPress={() => navigation.goBack()} style={styles.backButton} />
@@ -474,9 +621,9 @@ const styles = StyleSheet.create({
   pokemonCaptureHeader: { backgroundColor: '#F8F8F8', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 8, borderWidth: 4, borderColor: '#000', shadowColor: '#000', shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0 },
   captureTitle: { fontSize: 32, fontWeight: 'bold', color: '#000', letterSpacing: 2 },
   tensionBarContainer: { width: '100%', alignItems: 'center' },
-  tensionBarHorizontal: { width: width * 0.85, height: 50, backgroundColor: '#E0E0E0', borderRadius: 8, position: 'relative', borderWidth: 4, borderColor: '#000', overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 3, height: 3 }, shadowOpacity: 1, shadowRadius: 0 },
-  sweetSpotHorizontal: { position: 'absolute', height: '100%', borderRadius: 4, opacity: 0.4, borderWidth: 2, borderColor: '#000' },
-  indicatorHorizontal: { position: 'absolute', height: '90%', borderRadius: 6, top: '5%', borderWidth: 4, borderColor: '#000', shadowColor: '#000', shadowOffset: { width: 2, height: 2 }, shadowOpacity: 1, shadowRadius: 0 },
+  tensionBarHorizontal: { width: width * 0.85, height: 50, backgroundColor: '#E0E0E0', borderRadius: 8, position: 'relative', borderWidth: 4, borderColor: '#000', overflow: 'visible', shadowColor: '#000', shadowOffset: { width: 3, height: 3 }, shadowOpacity: 1, shadowRadius: 0 },
+  captureZone: { position: 'absolute', height: '100%', borderRadius: 4, opacity: 0.5, borderWidth: 2, borderColor: '#000' },
+  pokemonIndicator: { position: 'absolute', height: '90%', width: 20, top: '5%', borderRadius: 6, backgroundColor: '#FF5252', borderWidth: 3, borderColor: '#000', marginLeft: -10 },
   captureProgressContainer: { width: '100%', alignItems: 'center', gap: 8 },
   progressBarOuter: { width: '100%', height: 32, backgroundColor: '#E0E0E0', borderRadius: 8, borderWidth: 4, borderColor: '#000', overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 3, height: 3 }, shadowOpacity: 1, shadowRadius: 0 },
   progressBarInner: { height: '100%', borderRadius: 4 },
@@ -498,6 +645,7 @@ const styles = StyleSheet.create({
   ballCard: { flex: 1, backgroundColor: '#FFF', padding: 14, borderRadius: 8, alignItems: 'center', borderWidth: 3, borderColor: '#CCC', shadowColor: '#000', shadowOffset: { width: 2, height: 2 }, shadowOpacity: 0.3, shadowRadius: 0 },
   ballCardSelected: { backgroundColor: '#FFF9C4', borderColor: '#000', shadowOffset: { width: 3, height: 3 } },
   ballIcon: { fontSize: 36, marginBottom: 6 },
+  ballSprite: { width: 40, height: 40, marginBottom: 6 },
   ballName: { fontSize: 11, color: '#000', fontWeight: 'bold', textAlign: 'center' },
   ballLabel: { fontSize: 9, color: '#666', marginTop: 2, textAlign: 'center' },
   ballCount: { fontSize: 12, color: '#000', fontWeight: 'bold', marginTop: 4 },
@@ -508,12 +656,14 @@ const styles = StyleSheet.create({
   berryCard: { flex: 1, backgroundColor: '#FFF', padding: 14, borderRadius: 8, alignItems: 'center', borderWidth: 3, borderColor: '#CCC', shadowColor: '#000', shadowOffset: { width: 2, height: 2 }, shadowOpacity: 0.3, shadowRadius: 0 },
   berryCardActive: { backgroundColor: '#C8E6C9', borderColor: '#000', shadowOffset: { width: 3, height: 3 } },
   berryIcon: { fontSize: 36, marginBottom: 6 },
+  berrySprite: { width: 40, height: 40, marginBottom: 6 },
   berryName: { fontSize: 11, color: '#000', fontWeight: 'bold', textAlign: 'center' },
   berryEffect: { fontSize: 9, color: '#666', marginTop: 2, textAlign: 'center' },
   berryCount: { fontSize: 12, color: '#000', fontWeight: 'bold', marginTop: 4 },
   statusSurface: { position: 'absolute', bottom: 250, alignSelf: 'center', backgroundColor: '#F8F8F8', padding: 24, borderRadius: 8, alignItems: 'center', zIndex: 10, borderWidth: 4, borderColor: '#000', shadowColor: '#000', shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, minWidth: width * 0.8 },
   successText: { fontSize: 28, fontWeight: 'bold', color: '#000', letterSpacing: 1 },
   successSubtext: { fontSize: 16, color: '#000', marginTop: 6, textTransform: 'capitalize' },
+  qualityBadge: { fontSize: 20, fontWeight: 'bold', color: '#FFD700', marginTop: 8, letterSpacing: 1 },
   rewardText: { fontSize: 14, color: '#666', marginTop: 8, fontWeight: '600' },
   escapeText: { fontSize: 24, fontWeight: 'bold', color: '#000' },
   backButton: { position: 'absolute', top: 50, left: 20, zIndex: 10 },

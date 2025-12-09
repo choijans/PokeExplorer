@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Alert, StyleSheet, View, ScrollView } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Button, Text, useTheme } from 'react-native-paper';
 import Screen from '../components/ui/Screen';
 import SectionCard from '../components/ui/SectionCard';
@@ -8,6 +9,7 @@ import { discoveryService } from '../services/discoveryService';
 import { inventoryService, InventoryItem } from '../services/inventoryService';
 import { firebaseInventoryService } from '../services/firebaseInventoryService';
 import { currencyService } from '../services/currencyService';
+import { levelService, LevelData } from '../services/levelService';
 import type { PokemonTheme } from '../theme';
 
 const UserProfileScreen: React.FC = () => {
@@ -15,6 +17,7 @@ const UserProfileScreen: React.FC = () => {
   const [discoveryCount, setDiscoveryCount] = useState(0);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [coins, setCoins] = useState(0);
+  const [levelData, setLevelData] = useState<LevelData>({ level: 1, xp: 0, totalXP: 0 });
   const theme = useTheme<PokemonTheme>();
 
   useEffect(() => {
@@ -22,8 +25,20 @@ const UserProfileScreen: React.FC = () => {
       loadDiscoveredPokemon();
       loadInventory();
       loadCoins();
+      loadLevel();
     }
   }, [user]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      if (user) {
+        loadDiscoveredPokemon();
+        loadInventory();
+        loadCoins();
+        loadLevel();
+      }
+    }, [user])
+  );
 
   const loadDiscoveredPokemon = async () => {
     try {
@@ -51,6 +66,17 @@ const UserProfileScreen: React.FC = () => {
       }
     } catch (error) {
       console.error('Error loading coins:', error);
+    }
+  };
+
+  const loadLevel = async () => {
+    try {
+      if (user) {
+        const data = await levelService.getLevelData(user.uid);
+        setLevelData(data);
+      }
+    } catch (error) {
+      console.error('Error loading level:', error);
     }
   };
 
@@ -85,6 +111,13 @@ const UserProfileScreen: React.FC = () => {
           <View style={styles.sectionContent}>
             <Text variant="labelLarge" style={{ color: theme.colors.onSurfaceVariant }}>Email</Text>
             <Text variant="titleMedium" style={{ color: theme.colors.onSurface }}>{user?.email || 'Not available'}</Text>
+          </View>
+          <View style={[styles.sectionContent, { marginTop: 12 }]}>
+            <Text variant="labelLarge" style={{ color: theme.colors.onSurfaceVariant }}>Level</Text>
+            <Text variant="titleLarge" style={{ color: theme.colors.primary, fontWeight: 'bold' }}>⭐ Level {levelData.level}</Text>
+            <Text variant="bodySmall" style={{ color: theme.colors.onSurfaceVariant, marginTop: 4 }}>
+              {levelData.xp} / {levelService.getXPForNextLevel(levelData.level)} XP
+            </Text>
           </View>
           <View style={[styles.sectionContent, { marginTop: 12 }]}>
             <Text variant="labelLarge" style={{ color: theme.colors.onSurfaceVariant }}>Coins</Text>

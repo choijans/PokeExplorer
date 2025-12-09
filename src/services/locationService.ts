@@ -127,27 +127,56 @@ class LocationService {
   }
 
   private getRandomRarity(): 'common' | 'uncommon' | 'rare' | 'legendary' {
+    const hour = new Date().getHours();
+    const isNight = hour < 6 || hour > 20;
+    const isDawn = hour >= 6 && hour < 8;
+    const isDusk = hour >= 18 && hour < 20;
     const rand = Math.random();
-    if (rand < 0.7) return 'common';
-    if (rand < 0.9) return 'uncommon';
-    if (rand < 0.98) return 'rare';
+    
+    // #1: Rarity-based spawn rates with time-based modifiers
+    // #9: Weather/time effects - night, dawn, dusk increase rare spawns
+    let rarityBoost = 0;
+    if (isNight) rarityBoost = 0.08;
+    else if (isDawn || isDusk) rarityBoost = 0.05;
+    
+    // Legendary spawn rate: 3% base, up to 11% at night
+    // Rare spawn rate: 9% base, up to 17% at night
+    // Uncommon: 23% base
+    // Common: 65% base, down to 57% at night
+    
+    if (rand < 0.65 - rarityBoost) return 'common';
+    if (rand < 0.88 - rarityBoost) return 'uncommon';
+    if (rand < 0.97) return 'rare';
     return 'legendary';
   }
 
   private getPokemonIdForBiome(biome: string, rarity: string): number {
-    const roll = Math.random();
-    let maxId;
+    // #3: Biome-specific spawning with #10: Time-based spawning
+    const hour = new Date().getHours();
+    const isNight = hour < 6 || hour > 20;
+    
+    const waterPokemon = [7, 8, 9, 54, 55, 60, 61, 62, 72, 73, 79, 80, 86, 87, 90, 91, 98, 99, 116, 117, 118, 119, 120, 121, 129, 130, 131, 134, 138, 139, 140, 141];
+    const grassPokemon = [1, 2, 3, 10, 11, 12, 13, 14, 15, 16, 17, 18, 43, 44, 45, 46, 47, 48, 49, 69, 70, 71, 102, 103, 114, 123, 127];
+    const urbanPokemon = [19, 20, 25, 26, 39, 40, 52, 53, 56, 57, 63, 64, 65, 66, 67, 68, 74, 75, 76, 81, 82, 88, 89, 92, 93, 94, 96, 97, 100, 101, 109, 110, 132];
+    const nightPokemon = [41, 42, 92, 93, 94, 163, 164, 198, 200, 353, 354, 355, 356];
+    const legendaries = [144, 145, 146, 150, 151, 243, 244, 245, 249, 250, 251, 377, 378, 379, 380, 381, 382, 383, 384, 385, 386];
     
     if (rarity === 'legendary') {
-      const legendaries = [150, 151, 144, 145, 146, 243, 244, 245, 249, 250, 251, 377, 378, 379, 380, 381, 382, 383, 384, 385, 386];
       return legendaries[Math.floor(Math.random() * legendaries.length)];
     }
     
-    if (roll < 0.6) maxId = 151;
-    else if (roll < 0.85) maxId = 251;
-    else maxId = 386;
+    // Night Pokemon spawn at night
+    if (isNight && Math.random() < 0.3) {
+      return nightPokemon[Math.floor(Math.random() * nightPokemon.length)];
+    }
     
-    return Math.floor(Math.random() * maxId) + 1;
+    let pool: number[] = [];
+    if (biome === 'water') pool = waterPokemon;
+    else if (biome === 'grass') pool = grassPokemon;
+    else if (biome === 'urban') pool = urbanPokemon;
+    else pool = [...grassPokemon, ...urbanPokemon].slice(0, 30);
+    
+    return pool[Math.floor(Math.random() * pool.length)];
   }
 
   private generateNearbyLocation(center: Location): Location {

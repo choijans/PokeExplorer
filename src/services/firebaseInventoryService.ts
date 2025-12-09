@@ -73,15 +73,47 @@ class FirebaseInventoryService {
   async addItem(userId: string, itemId: string, amount: number = 1): Promise<void> {
     try {
       const itemRef = database().ref(`users/${userId}/inventory/${itemId}`);
-      await itemRef.transaction((item) => {
-        if (item) {
-          item.count = (item.count || 0) + amount;
-        }
-        return item;
-      });
+      const snapshot = await itemRef.once('value');
+      const item = snapshot.val();
+      
+      if (item) {
+        await itemRef.update({ count: item.count + amount });
+      } else {
+        const itemData = this.getItemData(itemId);
+        await itemRef.set({ ...itemData, count: amount });
+      }
     } catch (error) {
       console.error('Failed to add item:', error);
     }
+  }
+
+  private getItemData(itemId: string): { name: string; type: string; icon: string } {
+    const items: Record<string, any> = {
+      pokeball: { name: 'Poké Ball', type: 'pokeball', icon: '⚪' },
+      greatball: { name: 'Great Ball', type: 'greatball', icon: '🔵' },
+      ultraball: { name: 'Ultra Ball', type: 'ultraball', icon: '🟡' },
+      masterball: { name: 'Master Ball', type: 'masterball', icon: '🟣' },
+      razz: { name: 'Razz Berry', type: 'razz', icon: '🍓' },
+      nanab: { name: 'Nanab Berry', type: 'nanab', icon: '🍌' },
+      pinap: { name: 'Pinap Berry', type: 'pinap', icon: '🍍' },
+      goldenrazz: { name: 'Golden Razz', type: 'goldenrazz', icon: '✨' },
+      incense: { name: 'Incense', type: 'incense', icon: '💨' },
+      luckyegg: { name: 'Lucky Egg', type: 'luckyegg', icon: '🥚' },
+      starpiece: { name: 'Star Piece', type: 'starpiece', icon: '⭐' },
+    };
+    return items[itemId] || { name: itemId, type: itemId, icon: '❓' };
+  }
+
+  subscribeToInventory(userId: string, callback: (inventory: InventoryItem[]) => void): () => void {
+    const ref = database().ref(`users/${userId}/inventory`);
+    
+    const listener = ref.on('value', (snapshot) => {
+      const data = snapshot.val();
+      const inventory: InventoryItem[] = data ? Object.entries(data).map(([id, item]: [string, any]) => ({ id, ...item })) : [];
+      callback(inventory);
+    });
+
+    return () => ref.off('value', listener);
   }
 
   getCatchRateBonus(ballType: string): number {
