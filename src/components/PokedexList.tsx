@@ -25,7 +25,9 @@ import Screen from './ui/Screen';
 import SectionCard from './ui/SectionCard';
 import { Pokemon, pokeApi } from '../services/pokeApi';
 import { discoveryService } from '../services/discoveryService';
+import { firebaseDiscoveryService } from '../services/firebaseDiscoveryService';
 import { imageCacheService } from '../services/imageCache';
+import { useAuth } from '../contexts/AuthContext';
 import type { PokemonTheme } from '../theme';
 
 const PAGE_SIZE = 20;
@@ -33,6 +35,7 @@ const PAGE_SIZE = 20;
 const PokedexList: React.FC = () => {
   const navigation = useNavigation();
   const theme = useTheme<PokemonTheme>();
+  const { user } = useAuth();
   const [pokemon, setPokemon] = useState<Pokemon[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<Pokemon[]>([]);
@@ -161,9 +164,14 @@ const PokedexList: React.FC = () => {
   );
 
   const loadDiscoveredPokemon = useCallback(async () => {
-    const discovered = await discoveryService.getDiscoveredPokemon();
-    setDiscoveredIds(new Set(discovered.map((p) => p.id)));
-  }, []);
+    if (user) {
+      const discovered = await firebaseDiscoveryService.getCapturedPokemon(user.uid);
+      setDiscoveredIds(new Set(discovered.map((p) => p.id)));
+    } else {
+      const discovered = await discoveryService.getDiscoveredPokemon();
+      setDiscoveredIds(new Set(discovered.map((p) => p.id)));
+    }
+  }, [user]);
 
   const loadInitialPokemon = useCallback(async () => {
     setHasMore(true);

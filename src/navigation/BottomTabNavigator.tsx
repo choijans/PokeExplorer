@@ -84,14 +84,7 @@ const BottomTabNavigator: React.FC = () => {
           ),
         }}
       />
-      <Tab.Screen
-        name="Social"
-        component={SocialScreen}
-        options={{
-          tabBarLabel: 'Social',
-          tabBarIcon: ({ color }) => <Text style={{ fontSize: 24, color }}>👥</Text>,
-        }}
-      />
+
       <Tab.Screen
         name="Profile"
         component={UserProfileScreen}

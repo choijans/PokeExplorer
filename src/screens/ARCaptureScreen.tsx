@@ -484,7 +484,7 @@ const ARCaptureScreen: React.FC = () => {
                   left: captureZoneAnim.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }),
                   width: `${getBallConfig(selectedBall).sweetSpotSize}%`,
                   backgroundColor: getBallConfig(selectedBall).color,
-                  transform: [{ translateX: -getBallConfig(selectedBall).sweetSpotSize / 2 }]
+                  marginLeft: `-${getBallConfig(selectedBall).sweetSpotSize / 2}%`
                 }]} />
                 <Animated.View style={[styles.pokemonIndicator, { 
                   left: pokemonAnim.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }),

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { discoveryService, DiscoveredPokemon } from '../services/discoveryService';
+import { firebaseDiscoveryService } from '../services/firebaseDiscoveryService';
 import { pokeApi, Pokemon } from '../services/pokeApi';
 import { pokemonInstanceService } from '../services/pokemonInstanceService';
 import PokemonCard from '../components/PokemonCard';
@@ -26,11 +27,23 @@ const CollectionScreen: React.FC = () => {
 
   useEffect(() => {
     loadDiscoveredPokemon();
-  }, []);
+  }, [user]);
 
   const loadDiscoveredPokemon = async () => {
     try {
-      const discoveredList = await discoveryService.getDiscoveredPokemon();
+      let discoveredList: any[] = [];
+      if (user) {
+        const captured = await firebaseDiscoveryService.getCapturedPokemon(user.uid);
+        discoveredList = captured.map(c => ({
+          id: c.id,
+          name: c.name,
+          count: c.count,
+          discoveredAt: c.firstCapturedAt,
+          biome: '',
+        }));
+      } else {
+        discoveredList = await discoveryService.getDiscoveredPokemon();
+      }
       setDiscovered(discoveredList);
 
       const pokemonDataMap: { [key: number]: Pokemon } = {};
