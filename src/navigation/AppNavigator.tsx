@@ -4,9 +4,9 @@ import { useAuth } from '../contexts/AuthContext';
 import LoginScreen from '../screens/LoginScreen';
 import BottomTabNavigator from './BottomTabNavigator';
 import PokemonDetail from '../components/PokemonDetail';
+import SplashScreen from '../screens/SplashScreen';
 import { Pokemon } from '../services/pokeApi';
-import { ActivityIndicator, useTheme } from 'react-native-paper';
-import { View, StyleSheet } from 'react-native';
+import { useTheme } from 'react-native-paper';
 import type { PokemonTheme } from '../theme';
 
 export type RootStackParamList = {
@@ -23,11 +23,7 @@ const AppNavigator: React.FC = () => {
   const theme = useTheme<PokemonTheme>();
 
   if (loading) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: theme.colors.background }]}>
-        <ActivityIndicator animating size="large" color={theme.colors.primary} />
-      </View>
-    );
+    return <SplashScreen />;
   }
 
   return (
@@ -68,13 +64,5 @@ const AppNavigator: React.FC = () => {
     </Stack.Navigator>
   );
 };
-
-const styles = StyleSheet.create({
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-});
 
 export default AppNavigator;

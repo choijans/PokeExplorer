@@ -267,19 +267,6 @@ const CommunityFeedScreen: React.FC = () => {
     }
   };
 
-  const testFirebaseConnection = async () => {
-    try {
-      const testRef = database().ref('test');
-      await testRef.set({
-        timestamp: Date.now(),
-        message: 'Test successful!',
-        from: 'CommunityFeedScreen',
-      });
-    } catch (error) {
-      console.error('Firebase test failed:', error);
-    }
-  };
-
   const isOwnPost = (post: CommunityPost) => communityService.getCurrentUserId() === post.userId;
 
   const formatTimestamp = (timestamp: number) => {
@@ -375,9 +362,7 @@ const CommunityFeedScreen: React.FC = () => {
             </Button>
           }
         >
-          <Button mode="text" icon="database" onPress={testFirebaseConnection}>
-            Test Firebase
-          </Button>
+          <View />
         </SectionCard>
 
         {loading ? (
