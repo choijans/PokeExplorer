@@ -39,6 +39,17 @@ class CommunityService {
   private usersRef = database().ref('users');
 
   /**
+   * Extract username from email address
+   * Example: "sum@gmail.com" -> "sum"
+   */
+  private extractUsernameFromEmail(email: string): string {
+    if (!email) return 'Anonymous';
+    const atIndex = email.indexOf('@');
+    if (atIndex === -1) return email;
+    return email.substring(0, atIndex);
+  }
+
+  /**
    * Create a new community post
    */
   async createPost(
@@ -67,7 +78,7 @@ class CommunityService {
 
       const post: Omit<CommunityPost, 'id'> = {
         userId: user.uid,
-        username: userProfile.username || user.displayName || 'Anonymous',
+        username: userProfile.username || user.displayName || (user.email ? this.extractUsernameFromEmail(user.email) : 'Anonymous'),
         userAvatar: userProfile.avatar || user.photoURL || undefined,
         pokemonId,
         pokemonName,
@@ -210,7 +221,7 @@ class CommunityService {
       const comment: Omit<Comment, 'id'> = {
         postId,
         userId: user.uid,
-        username: userProfile.username || user.displayName || 'Anonymous',
+        username: userProfile.username || user.displayName || (user.email ? this.extractUsernameFromEmail(user.email) : 'Anonymous'),
         userAvatar: userProfile.avatar || user.photoURL || undefined,
         text,
         timestamp: database.ServerValue.TIMESTAMP as any,
