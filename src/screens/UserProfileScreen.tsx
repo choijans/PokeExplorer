@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Alert, StyleSheet, View, ScrollView } from 'react-native';
+import { Alert, StyleSheet, View, ScrollView, Image } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Button, Text, useTheme } from 'react-native-paper';
 import Screen from '../components/ui/Screen';
@@ -144,7 +144,11 @@ const UserProfileScreen: React.FC = () => {
           <View style={styles.inventoryGrid}>
             {inventory.map(item => (
               <View key={item.id} style={styles.inventoryItem}>
-                <Text style={styles.inventoryIcon}>{item.icon}</Text>
+                {item.sprite ? (
+                  <Image source={{ uri: item.sprite }} style={styles.inventorySprite} />
+                ) : (
+                  <Text style={styles.inventoryIcon}>{item.icon}</Text>
+                )}
                 <Text style={[styles.inventoryName, { color: theme.colors.onSurface }]}>{item.name}</Text>
                 <Text style={[styles.inventoryCount, { color: theme.colors.primary }]}>x{item.count}</Text>
               </View>
@@ -165,6 +169,7 @@ const styles = StyleSheet.create({
   inventoryGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   inventoryItem: { width: '30%', backgroundColor: 'rgba(0,0,0,0.05)', padding: 12, borderRadius: 12, alignItems: 'center' },
   inventoryIcon: { fontSize: 36, marginBottom: 6 },
+  inventorySprite: { width: 40, height: 40, marginBottom: 6 },
   inventoryName: { fontSize: 11, fontWeight: '600', textAlign: 'center' },
   inventoryCount: { fontSize: 14, fontWeight: 'bold', marginTop: 4 },
 });

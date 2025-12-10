@@ -15,10 +15,10 @@ class FirebaseInventoryService {
       const data = snapshot.val();
       
       if (data) {
-        return Object.entries(data).map(([id, item]: [string, any]) => ({
-          id,
-          ...item,
-        }));
+        return Object.entries(data).map(([id, item]: [string, any]) => {
+          const itemData = this.getItemData(id);
+          return { id, ...item, ...itemData };
+        });
       }
       
       // Initialize default inventory
@@ -87,21 +87,25 @@ class FirebaseInventoryService {
     }
   }
 
-  private getItemData(itemId: string): { name: string; type: string; icon: string } {
+  private getItemData(itemId: string): { name: string; type: string; icon: string; category: string; sprite?: string } {
     const items: Record<string, any> = {
-      pokeball: { name: 'Poké Ball', type: 'pokeball', icon: '⚪' },
-      greatball: { name: 'Great Ball', type: 'greatball', icon: '🔵' },
-      ultraball: { name: 'Ultra Ball', type: 'ultraball', icon: '🟡' },
-      masterball: { name: 'Master Ball', type: 'masterball', icon: '🟣' },
-      razz: { name: 'Razz Berry', type: 'razz', icon: '🍓' },
-      nanab: { name: 'Nanab Berry', type: 'nanab', icon: '🍌' },
-      pinap: { name: 'Pinap Berry', type: 'pinap', icon: '🍍' },
-      goldenrazz: { name: 'Golden Razz', type: 'goldenrazz', icon: '✨' },
-      incense: { name: 'Incense', type: 'incense', icon: '💨' },
-      luckyegg: { name: 'Lucky Egg', type: 'luckyegg', icon: '🥚' },
-      starpiece: { name: 'Star Piece', type: 'starpiece', icon: '⭐' },
+      pokeball: { name: 'Poké Ball', type: 'ball', icon: '⚪', category: 'pokeball', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png' },
+      greatball: { name: 'Great Ball', type: 'ball', icon: '🔵', category: 'pokeball', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/great-ball.png' },
+      ultraball: { name: 'Ultra Ball', type: 'ball', icon: '🟡', category: 'pokeball', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/ultra-ball.png' },
+      masterball: { name: 'Master Ball', type: 'ball', icon: '🟣', category: 'pokeball', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/master-ball.png' },
+      razz: { name: 'Razz Berry', type: 'berry', icon: '🍓', category: 'berry', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/razz-berry.png' },
+      nanab: { name: 'Nanab Berry', type: 'berry', icon: '🍌', category: 'berry', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/nanab-berry.png' },
+      pinap: { name: 'Pinap Berry', type: 'berry', icon: '🍍', category: 'berry', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/pinap-berry.png' },
+      goldenrazz: { name: 'Golden Razz', type: 'berry', icon: '✨', category: 'berry', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/golden-razz-berry.png' },
+      silverpinap: { name: 'Silver Pinap', type: 'berry', icon: '🌟', category: 'berry', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/silver-pinap-berry.png' },
+      basiclure: { name: 'Basic Lure', type: 'lure', icon: '🎣', category: 'map-lure' },
+      superlure: { name: 'Super Lure', type: 'lure', icon: '🎣', category: 'map-lure' },
+      rarelure: { name: 'Rare Lure', type: 'lure', icon: '🌟', category: 'map-lure' },
+      luckyegg: { name: 'Lucky Egg', type: 'booster', icon: '🥚', category: 'xp-boost', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/lucky-egg.png' },
+      starpiece: { name: 'Star Piece', type: 'booster', icon: '⭐', category: 'xp-boost', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/star-piece.png' },
+      superegg: { name: 'Super Egg', type: 'booster', icon: '🥚', category: 'xp-boost' },
     };
-    return items[itemId] || { name: itemId, type: itemId, icon: '❓' };
+    return items[itemId] || { name: itemId, type: itemId, icon: '❓', category: 'other' };
   }
 
   subscribeToInventory(userId: string, callback: (inventory: InventoryItem[]) => void): () => void {
@@ -109,7 +113,10 @@ class FirebaseInventoryService {
     
     const listener = ref.on('value', (snapshot) => {
       const data = snapshot.val();
-      const inventory: InventoryItem[] = data ? Object.entries(data).map(([id, item]: [string, any]) => ({ id, ...item })) : [];
+      const inventory: InventoryItem[] = data ? Object.entries(data).map(([id, item]: [string, any]) => {
+        const itemData = this.getItemData(id);
+        return { id, ...item, ...itemData };
+      }) : [];
       callback(inventory);
     });
 

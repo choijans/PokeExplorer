@@ -21,8 +21,8 @@ interface CacheStats {
 class ImageCacheService {
   private memoryCache: Map<string, CacheEntry> = new Map();
   private cacheStats: CacheStats = { hits: 0, misses: 0, size: 0 };
-  private maxMemoryCacheSize = 50; // Reduced to prevent disk full
-  private cacheExpiryTime = 6 * 60 * 60 * 1000; // 6 hours (reduced from 24)
+  private maxMemoryCacheSize = 15;
+  private cacheExpiryTime = 30 * 60 * 1000;
 
   /**
    * Get cached image URL or return original URL if not cached
@@ -87,6 +87,19 @@ class ImageCacheService {
   clearCache(): void {
     this.memoryCache.clear();
     this.cacheStats = { hits: 0, misses: 0, size: 0 };
+  }
+  
+  /**
+   * Clear old entries
+   */
+  clearOldEntries(): void {
+    const now = Date.now();
+    for (const [key, entry] of this.memoryCache.entries()) {
+      if (now - entry.timestamp > this.cacheExpiryTime) {
+        this.memoryCache.delete(key);
+        this.cacheStats.size--;
+      }
+    }
   }
 
   /**

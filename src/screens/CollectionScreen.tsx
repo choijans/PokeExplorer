@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, FlatList, StyleSheet, TouchableOpacity } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { discoveryService, DiscoveredPokemon } from '../services/discoveryService';
 import { firebaseDiscoveryService } from '../services/firebaseDiscoveryService';
 import { pokeApi, Pokemon } from '../services/pokeApi';
@@ -25,9 +25,11 @@ const CollectionScreen: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'pokedex' | 'inventory'>('pokedex');
 
-  useEffect(() => {
-    loadDiscoveredPokemon();
-  }, [user]);
+  useFocusEffect(
+    React.useCallback(() => {
+      loadDiscoveredPokemon();
+    }, [user])
+  );
 
   const loadDiscoveredPokemon = async () => {
     try {
@@ -49,7 +51,7 @@ const CollectionScreen: React.FC = () => {
       const pokemonDataMap: { [key: number]: Pokemon } = {};
       const counts: { [key: number]: number } = {};
       
-      for (const item of discoveredList) {
+      const promises = discoveredList.map(async (item) => {
         try {
           const pokemon = await pokeApi.getPokemon(item.id);
           pokemonDataMap[item.id] = pokemon;
@@ -61,7 +63,9 @@ const CollectionScreen: React.FC = () => {
         } catch (error) {
           console.error(`Failed to load Pokemon ${item.id}:`, error);
         }
-      }
+      });
+      
+      await Promise.all(promises);
       setPokemonData(pokemonDataMap);
       setCatchCounts(counts);
     } catch (error) {

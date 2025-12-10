@@ -10,6 +10,7 @@ import {
   Platform,
   PermissionsAndroid,
   ImageBackground,
+  Vibration,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Camera, useCameraDevice } from 'react-native-vision-camera';
@@ -23,6 +24,7 @@ import { pokemonInstanceService } from '../services/pokemonInstanceService';
 import { levelService } from '../services/levelService';
 import { catchHistoryService } from '../services/catchHistoryService';
 import { firebaseCatchHistoryService } from '../services/firebaseCatchHistoryService';
+import { offlineCacheService } from '../services/offlineCacheService';
 import { useAuth } from '../contexts/AuthContext';
 
 const { width, height } = Dimensions.get('window');
@@ -137,6 +139,7 @@ const ARCaptureScreen: React.FC = () => {
     const canUse = user ? await firebaseInventoryService.useItem(user.uid, selectedBall) : await inventoryService.useItem(selectedBall);
     if (!canUse) { alert('No Poké Balls left!'); return; }
     
+    Vibration.vibrate(50);
     setAnnounceText(`You threw a ${inventory.find(i => i.id === selectedBall)?.name}!`);
     setCatching(true);
     setShowThrowButton(false);
@@ -219,13 +222,13 @@ const ARCaptureScreen: React.FC = () => {
       pokemonPosRef.current += pokemonVelocityRef.current;
       pokemonPosRef.current = Math.max(10, Math.min(90, pokemonPosRef.current));
       
-      // Zone movement with acceleration (slower)
+      // Zone movement with faster acceleration
       if (isHoldingRef.current) {
-        captureZoneVelocityRef.current += 0.08;
-        captureZoneVelocityRef.current = Math.min(1.2, captureZoneVelocityRef.current);
+        captureZoneVelocityRef.current += 0.15;
+        captureZoneVelocityRef.current = Math.min(2.0, captureZoneVelocityRef.current);
       } else {
-        captureZoneVelocityRef.current -= 0.08;
-        captureZoneVelocityRef.current = Math.max(-1.2, captureZoneVelocityRef.current);
+        captureZoneVelocityRef.current -= 0.15;
+        captureZoneVelocityRef.current = Math.max(-2.0, captureZoneVelocityRef.current);
       }
       
       captureZonePosRef.current += captureZoneVelocityRef.current;
@@ -248,19 +251,19 @@ const ARCaptureScreen: React.FC = () => {
       if (inZone) timeInZoneRef.current++;
       tensionSamplesRef.current.push(progressRef.current);
       
-      // Update UI less frequently
-      if (frameCount % 15 === 0) {
-        setCaptureProgress(Math.floor(progressRef.current));
-        progressAnim.setValue(progressRef.current);
-      }
+      // Update UI every frame for ultra-smooth feedback
+      setCaptureProgress(Math.floor(progressRef.current));
+      progressAnim.setValue(progressRef.current);
       
       // Win/lose
       if (progressRef.current >= 100) {
         intervalRef.current = null;
+        Vibration.vibrate([0, 100, 50, 100]);
         handleCaptureSuccess();
         return;
       } else if (progressRef.current <= 0) {
         intervalRef.current = null;
+        Vibration.vibrate(200);
         handleCaptureFailure();
         return;
       }
@@ -311,14 +314,26 @@ const ARCaptureScreen: React.FC = () => {
       setCandyGained(candy);
       
       if (user) {
-        const instance = await pokemonInstanceService.saveCaughtPokemon(user.uid, pokemon, rarity);
-        await firebaseDiscoveryService.addCapturedPokemon(user.uid, pokemon, undefined, biome);
-        const levelResult = await levelService.addXP(user.uid, xp);
-        
-        if (levelResult.leveledUp) {
-          setTimeout(() => {
-            alert(`🎉 Level Up!\n\nYou reached Level ${levelResult.newLevel}!`);
-          }, 2000);
+        try {
+          const instance = await pokemonInstanceService.saveCaughtPokemon(user.uid, pokemon, rarity);
+          await firebaseDiscoveryService.addCapturedPokemon(user.uid, pokemon, undefined, biome);
+          const levelResult = await levelService.addXP(user.uid, xp);
+          
+          if (levelResult.leveledUp) {
+            setTimeout(() => {
+              alert(`🎉 Level Up!\n\nYou reached Level ${levelResult.newLevel}!`);
+            }, 2000);
+          }
+          
+          await offlineCacheService.syncToFirebase(user.uid);
+        } catch (error) {
+          await offlineCacheService.addToCache(`users/{userId}/caught/${pokemon.id}`, { pokemon, rarity, xp, biome });
+          const cacheSize = await offlineCacheService.getCacheSize();
+          if (cacheSize > 0) {
+            setTimeout(() => {
+              Alert.alert('Saved Offline', `Catch saved locally. ${cacheSize} pending sync.`);
+            }, 2500);
+          }
         }
       } else {
         await discoveryService.addDiscoveredPokemon(pokemon, undefined, biome);
@@ -404,9 +419,9 @@ const ARCaptureScreen: React.FC = () => {
 
   const getBallConfig = (ballId: string) => {
     const configs: Record<string, any> = {
-      pokeball: { sweetSpotSize: 18, fillSpeed: 0.4, color: '#FF5252', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png' },
-      greatball: { sweetSpotSize: 22, fillSpeed: 0.6, color: '#2196F3', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/great-ball.png' },
-      ultraball: { sweetSpotSize: 26, fillSpeed: 0.8, color: '#FFD700', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/ultra-ball.png' },
+      pokeball: { sweetSpotSize: 30, fillSpeed: 0.32, color: '#FF5252', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png' },
+      greatball: { sweetSpotSize: 34, fillSpeed: 0.48, color: '#2196F3', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/great-ball.png' },
+      ultraball: { sweetSpotSize: 38, fillSpeed: 0.65, color: '#FFD700', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/ultra-ball.png' },
       masterball: { sweetSpotSize: 100, fillSpeed: 5.0, color: '#9C27B0', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/master-ball.png' },
     };
     return configs[ballId] || configs.pokeball;
@@ -418,7 +433,7 @@ const ARCaptureScreen: React.FC = () => {
   };
 
   const getRarityDrainSpeed = (rarity: 'common'|'uncommon'|'rare'|'epic'|'legendary') => {
-    const drainSpeeds = { common: 0.25, uncommon: 0.22, rare: 0.18, epic: 0.15, legendary: 0.12 };
+    const drainSpeeds = { common: 0.28, uncommon: 0.24, rare: 0.20, epic: 0.16, legendary: 0.13 };
     return drainSpeeds[rarity];
   };
 
@@ -495,10 +510,10 @@ const ARCaptureScreen: React.FC = () => {
               <View style={styles.progressBarOuter}>
                 <Animated.View style={[styles.progressBarInner, { 
                   width: progressAnim.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }),
-                  backgroundColor: getBallConfig(selectedBall).color,
+                  backgroundColor: captureProgress < 30 ? '#FF5252' : captureProgress < 70 ? '#FFD700' : '#4CAF50',
                 }]} />
               </View>
-              <Text style={styles.progressText}>{Math.floor(captureProgress)}%</Text>
+              <Text style={[styles.progressText, { color: captureProgress < 30 ? '#FF5252' : captureProgress < 70 ? '#FFD700' : '#4CAF50' }]}>{Math.floor(captureProgress)}%</Text>
             </View>
             <View style={styles.hintBox}>
               <Text style={styles.fishHint}>HOLD to move zone RIGHT!</Text>
@@ -552,8 +567,13 @@ const ARCaptureScreen: React.FC = () => {
           ) : (
             <View style={styles.itemsPanel}>
               <Text style={styles.sectionTitle}>USE BERRY</Text>
+              {selectedBerry && (
+                <View style={styles.activeEffectBanner}>
+                  <Text style={styles.activeEffectText}>✓ {inventory.find(i => i.id === selectedBerry)?.name} ACTIVE</Text>
+                </View>
+              )}
               <View style={styles.berryGrid}>
-                {inventory.filter(i => i.type.includes('razz') || i.type.includes('nanab') || i.type.includes('pinap')).map(item => {
+                {inventory.filter(i => i.category === 'berry').map(item => {
                   const berrySprites: Record<string, string> = {
                     razz: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/razz-berry.png',
                     nanab: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/nanab-berry.png',
@@ -622,7 +642,7 @@ const styles = StyleSheet.create({
   captureTitle: { fontSize: 32, fontWeight: 'bold', color: '#000', letterSpacing: 2 },
   tensionBarContainer: { width: '100%', alignItems: 'center' },
   tensionBarHorizontal: { width: width * 0.85, height: 50, backgroundColor: '#E0E0E0', borderRadius: 8, position: 'relative', borderWidth: 4, borderColor: '#000', overflow: 'visible', shadowColor: '#000', shadowOffset: { width: 3, height: 3 }, shadowOpacity: 1, shadowRadius: 0 },
-  captureZone: { position: 'absolute', height: '100%', borderRadius: 4, opacity: 0.5, borderWidth: 2, borderColor: '#000' },
+  captureZone: { position: 'absolute', height: '100%', borderRadius: 4, opacity: 0.4, borderWidth: 3, borderColor: '#000', shadowColor: '#000', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.8, shadowRadius: 8 },
   pokemonIndicator: { position: 'absolute', height: '90%', width: 20, top: '5%', borderRadius: 6, backgroundColor: '#FF5252', borderWidth: 3, borderColor: '#000', marginLeft: -10 },
   captureProgressContainer: { width: '100%', alignItems: 'center', gap: 8 },
   progressBarOuter: { width: '100%', height: 32, backgroundColor: '#E0E0E0', borderRadius: 8, borderWidth: 4, borderColor: '#000', overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 3, height: 3 }, shadowOpacity: 1, shadowRadius: 0 },
@@ -660,6 +680,8 @@ const styles = StyleSheet.create({
   berryName: { fontSize: 11, color: '#000', fontWeight: 'bold', textAlign: 'center' },
   berryEffect: { fontSize: 9, color: '#666', marginTop: 2, textAlign: 'center' },
   berryCount: { fontSize: 12, color: '#000', fontWeight: 'bold', marginTop: 4 },
+  activeEffectBanner: { backgroundColor: '#4CAF50', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8, marginBottom: 12, borderWidth: 3, borderColor: '#000', alignItems: 'center' },
+  activeEffectText: { fontSize: 12, fontWeight: 'bold', color: '#FFF', letterSpacing: 1 },
   statusSurface: { position: 'absolute', bottom: 250, alignSelf: 'center', backgroundColor: '#F8F8F8', padding: 24, borderRadius: 8, alignItems: 'center', zIndex: 10, borderWidth: 4, borderColor: '#000', shadowColor: '#000', shadowOffset: { width: 4, height: 4 }, shadowOpacity: 1, shadowRadius: 0, minWidth: width * 0.8 },
   successText: { fontSize: 28, fontWeight: 'bold', color: '#000', letterSpacing: 1 },
   successSubtext: { fontSize: 16, color: '#000', marginTop: 6, textTransform: 'capitalize' },
