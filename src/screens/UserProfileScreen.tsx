@@ -6,6 +6,7 @@ import Screen from '../components/ui/Screen';
 import SectionCard from '../components/ui/SectionCard';
 import { useAuth } from '../contexts/AuthContext';
 import { discoveryService } from '../services/discoveryService';
+import { firebaseDiscoveryService } from '../services/firebaseDiscoveryService';
 import { inventoryService, InventoryItem } from '../services/inventoryService';
 import { firebaseInventoryService } from '../services/firebaseInventoryService';
 import { currencyService } from '../services/currencyService';
@@ -42,8 +43,15 @@ const UserProfileScreen: React.FC = () => {
 
   const loadDiscoveredPokemon = async () => {
     try {
-      const count = await discoveryService.getDiscoveryCount();
-      setDiscoveryCount(count);
+      if (user) {
+        // For logged-in users, get count from Firebase
+        const captured = await firebaseDiscoveryService.getCapturedPokemon(user.uid);
+        setDiscoveryCount(captured.length);
+      } else {
+        // For non-logged-in users, get count from local storage
+        const count = await discoveryService.getDiscoveryCount();
+        setDiscoveryCount(count);
+      }
     } catch (error) {
       console.error('Error loading discovery count:', error);
     }
