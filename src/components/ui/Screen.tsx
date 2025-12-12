@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, ScrollView, StyleSheet, ViewStyle, StyleProp } from 'react-native';
+import { View, ScrollView, StyleSheet, ViewStyle, StyleProp, Platform } from 'react-native';
 import LinearGradient from 'react-native-linear-gradient';
 import { useTheme } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { PokemonTheme } from '../../theme';
 
 interface ScreenProps {
@@ -10,6 +11,7 @@ interface ScreenProps {
   style?: StyleProp<ViewStyle>;
   contentStyle?: StyleProp<ViewStyle>;
   testID?: string;
+  edges?: ('top' | 'bottom' | 'left' | 'right')[];
 }
 
 const Screen: React.FC<ScreenProps> = ({
@@ -18,8 +20,17 @@ const Screen: React.FC<ScreenProps> = ({
   style,
   contentStyle,
   testID,
+  edges = ['top', 'bottom'],
 }) => {
   const theme = useTheme<PokemonTheme>();
+  const insets = useSafeAreaInsets();
+  
+  const safeAreaStyle = {
+    paddingTop: edges.includes('top') ? insets.top : 0,
+    paddingBottom: edges.includes('bottom') ? insets.bottom : 0,
+    paddingLeft: edges.includes('left') ? insets.left : 0,
+    paddingRight: edges.includes('right') ? insets.right : 0,
+  };
 
   const content = (
     <View style={[styles.content, { padding: theme.custom.spacing.md }, contentStyle]} testID={testID}>
@@ -28,7 +39,7 @@ const Screen: React.FC<ScreenProps> = ({
   );
 
   return (
-    <LinearGradient colors={theme.custom.gradients.canvas} style={[styles.container, style]}>
+    <LinearGradient colors={theme.custom.gradients.canvas} style={[styles.container, safeAreaStyle, style]}>
       {scrollable ? (
         <ScrollView
           contentContainerStyle={styles.scrollContainer}

@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Alert, Modal, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, ScrollView, Alert, Modal, Image, Platform } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { useNavigation } from '@react-navigation/native';
 import { Card, IconButton, Chip, FAB, Portal, Button } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { locationService, Location, PokemonEncounter } from '../services/locationService';
 import { pokeApi, Pokemon } from '../services/pokeApi';
 import { discoveryService } from '../services/discoveryService';
+import { firebaseDiscoveryService } from '../services/firebaseDiscoveryService';
 import { LazyImage } from '../components/LazyImage';
 import { imageCacheService } from '../services/imageCache';
 import { shopService, Shop } from '../services/shopService';
@@ -19,6 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const HuntScreen: React.FC = () => {
   const navigation = useNavigation();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [location, setLocation] = useState<Location | null>(null);
   const [encounters, setEncounters] = useState<PokemonEncounter[]>([]);
   const [loading, setLoading] = useState(true);
@@ -111,13 +114,19 @@ const HuntScreen: React.FC = () => {
 
   useEffect(() => {
     const checkDiscovered = async () => {
-      const discovered = await discoveryService.getDiscoveredPokemon();
-      const discoveredIds = discovered.map(p => p.id);
+      let discoveredIds: number[] = [];
+      if (user) {
+        const captured = await firebaseDiscoveryService.getCapturedPokemon(user.uid);
+        discoveredIds = captured.map(p => p.id);
+      } else {
+        const discovered = await discoveryService.getDiscoveredPokemon();
+        discoveredIds = discovered.map(p => p.id);
+      }
       setEncounters(prev => prev.map(enc => ({ ...enc, discovered: discoveredIds.includes(enc.id) })));
     };
     const unsubscribe = navigation.addListener('focus', checkDiscovered);
     return unsubscribe;
-  }, [navigation]);
+  }, [navigation, user]);
 
   const initializeHunt = async () => {
     setLoading(true);
@@ -339,7 +348,7 @@ const HuntScreen: React.FC = () => {
   };
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <Card style={styles.header}>
         <Card.Content style={styles.headerContent}>
           <Text style={styles.title}>Hunt Mode</Text>

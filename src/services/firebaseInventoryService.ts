@@ -111,13 +111,24 @@ class FirebaseInventoryService {
   subscribeToInventory(userId: string, callback: (inventory: InventoryItem[]) => void): () => void {
     const ref = database().ref(`users/${userId}/inventory`);
     
-    const listener = ref.on('value', (snapshot) => {
+    const listener = ref.on('value', async (snapshot) => {
       const data = snapshot.val();
-      const inventory: InventoryItem[] = data ? Object.entries(data).map(([id, item]: [string, any]) => {
-        const itemData = this.getItemData(id);
-        return { id, ...item, ...itemData };
-      }) : [];
-      callback(inventory);
+      if (data) {
+        const inventory: InventoryItem[] = Object.entries(data).map(([id, item]: [string, any]) => {
+          const itemData = this.getItemData(id);
+          return { id, ...item, ...itemData };
+        });
+        callback(inventory);
+      } else {
+        // No inventory data - initialize with starter items
+        const starter: InventoryItem[] = [
+          { id: 'pokeball', name: 'Poké Ball', type: 'pokeball', count: 10, icon: '⚪' },
+          { id: 'greatball', name: 'Great Ball', type: 'greatball', count: 5, icon: '🔵' },
+          { id: 'razz', name: 'Razz Berry', type: 'razz', count: 5, icon: '🍓' },
+        ];
+        await this.initializeInventory(userId, starter);
+        // The listener will fire again after initialization with the new data
+      }
     });
 
     return () => ref.off('value', listener);

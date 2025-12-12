@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { StyleSheet, View, Image, Animated, TouchableOpacity, Text, PanResponder, Dimensions, ToastAndroid, Platform } from 'react-native';
 import { useNavigation, useFocusEffect, useRoute } from '@react-navigation/native';
 import { IconButton, Card, Chip, FAB, Portal, Snackbar } from 'react-native-paper';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { locationService, PokemonEncounter } from '../services/locationService';
 import { pokeApi } from '../services/pokeApi';
 import { socialService, Gym, Pokestop } from '../services/socialService';
@@ -11,6 +12,7 @@ import { shopService, Shop } from '../services/shopService';
 import ShopModal from '../components/ShopModal';
 import { notificationService } from '../services/notificationService';
 import { useAuth } from '../contexts/AuthContext';
+import { STADIA_MAPS_API_KEY } from '@env';
 
 const TILE_SIZE = 256;
 
@@ -18,6 +20,7 @@ export default function MapScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const { user } = useAuth();
+  const insets = useSafeAreaInsets();
   const [screenDims] = useState(() => Dimensions.get('window'));
   const SCREEN_WIDTH = screenDims.width;
   const SCREEN_HEIGHT = screenDims.height;
@@ -218,7 +221,7 @@ export default function MapScreen() {
   const getTileUrl = useCallback((x: number, y: number, z: number) => {
     const key = `${z}-${x}-${y}`;
     if (!tileCache.current.has(key)) {
-      tileCache.current.set(key, `https://tiles.stadiamaps.com/tiles/osm_bright/${z}/${x}/${y}.png?api_key=c85391af-3b16-4bac-82ab-de934ffc3543`);
+      tileCache.current.set(key, `https://tiles.stadiamaps.com/tiles/osm_bright/${z}/${x}/${y}.png?api_key=${STADIA_MAPS_API_KEY}`);
     }
     return tileCache.current.get(key)!;
   }, []);
@@ -466,7 +469,7 @@ export default function MapScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.mapContainer} {...panResponder.panHandlers}>
         {tiles}
         {gymMarkers}

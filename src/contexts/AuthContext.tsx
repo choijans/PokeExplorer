@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import auth from '@react-native-firebase/auth';
+import database from '@react-native-firebase/database';
 
 interface AuthContextType {
   user: any;
@@ -37,7 +38,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signUpWithEmail = async (email: string, password: string) => {
-    await auth().createUserWithEmailAndPassword(email, password);
+    const userCredential = await auth().createUserWithEmailAndPassword(email, password);
+    const userId = userCredential.user.uid;
+    
+    // Give new users starter bonuses: 10 Pokéballs and 100 coins
+    await database().ref(`users/${userId}`).set({
+      coins: 100,
+      inventory: {
+        pokeball: {
+          name: 'Poké Ball',
+          type: 'ball',
+          count: 10,
+          icon: '⚪',
+        },
+      },
+      createdAt: database.ServerValue.TIMESTAMP,
+    });
   };
 
   const signOut = async () => {

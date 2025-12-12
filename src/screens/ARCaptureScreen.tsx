@@ -11,6 +11,7 @@ import {
   PermissionsAndroid,
   ImageBackground,
   Vibration,
+  Alert,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Camera, useCameraDevice } from 'react-native-vision-camera';
@@ -136,32 +137,61 @@ const ARCaptureScreen: React.FC = () => {
   };
 
   const handleThrow = async () => {
+    console.log('handleThrow called, selectedBall:', selectedBall, 'inventory:', inventory);
+    
+    if (inventory.length === 0) {
+      Alert.alert('Loading', 'Inventory is still loading. Please wait...');
+      return;
+    }
+    
+    const ballItem = inventory.find(i => i.id === selectedBall);
+    if (!ballItem || ballItem.count <= 0) {
+      Alert.alert('No Poké Balls', 'You don\'t have any Poké Balls left!');
+      return;
+    }
+    
     const canUse = user ? await firebaseInventoryService.useItem(user.uid, selectedBall) : await inventoryService.useItem(selectedBall);
-    if (!canUse) { alert('No Poké Balls left!'); return; }
+    if (!canUse) { 
+      Alert.alert('Error', 'Failed to use Poké Ball. Please try again.'); 
+      return; 
+    }
     
     Vibration.vibrate(50);
-    setAnnounceText(`You threw a ${inventory.find(i => i.id === selectedBall)?.name}!`);
+    setAnnounceText(`You threw a ${ballItem.name}!`);
     setCatching(true);
     setShowThrowButton(false);
     
-    setTimeout(() => startBallShake(), 800);
+    // Directly trigger the minigame after a delay instead of relying on animation callbacks
+    setTimeout(() => {
+      console.log('Timeout fired, starting ball shake sequence');
+      startBallShake();
+    }, 800);
   };
 
   const startBallShake = () => {
+    console.log('startBallShake called');
     setAnnounceText('The wild Pokémon is watching carefully...\nGet ready!');
+    
+    // Start dim animation
     Animated.timing(dimAnim, { toValue: 0.6, duration: 300, useNativeDriver: false }).start();
     
+    // Start shake animation
     Animated.sequence([
       Animated.timing(shakeAnim, { toValue: 10, duration: 150, useNativeDriver: true }),
       Animated.timing(shakeAnim, { toValue: -10, duration: 150, useNativeDriver: true }),
       Animated.timing(shakeAnim, { toValue: 0, duration: 150, useNativeDriver: true }),
-    ]).start(() => {
+    ]).start();
+    
+    // Use setTimeout to guarantee the minigame starts, regardless of animation callback issues
+    setTimeout(() => {
+      console.log('Starting minigame after shake delay');
       setShowMinigame(true);
       startMinigame();
-    });
+    }, 500);
   };
 
   const startMinigame = () => {
+    console.log('startMinigame called');
     const config = getBallConfig(selectedBall);
     captureZonePosRef.current = 50;
     captureZoneVelocityRef.current = 0;
@@ -180,6 +210,7 @@ const ARCaptureScreen: React.FC = () => {
     totalTimeRef.current = 0;
     
     setTimeout(() => {
+      console.log('Minigame ready, starting game loop');
       setMinigameReady(true);
       setAnnounceText('');
       startGameLoop();
@@ -187,6 +218,7 @@ const ARCaptureScreen: React.FC = () => {
   };
 
   const startGameLoop = () => {
+    console.log('startGameLoop called');
     const config = getBallConfig(selectedBall);
     let rarityDrainSpeed = getRarityDrainSpeed(rarity);
     let rarityMovement = getRarityMovement(rarity);
@@ -205,9 +237,15 @@ const ARCaptureScreen: React.FC = () => {
     let frameCount = 0;
     
     const loop = () => {
-      if (!intervalRef.current) return;
+      if (!intervalRef.current) {
+        console.log('Game loop stopped - intervalRef is null');
+        return;
+      }
       
       frameCount++;
+      if (frameCount === 1) {
+        console.log('First frame of game loop executing');
+      }
       const now = Date.now();
       
       // Pokemon AI - rarity affects movement
@@ -271,7 +309,11 @@ const ARCaptureScreen: React.FC = () => {
       intervalRef.current = requestAnimationFrame(loop);
     };
     
+    // Set a placeholder to pass the initial check
+    intervalRef.current = 1 as any;
+    console.log('Starting first requestAnimationFrame');
     intervalRef.current = requestAnimationFrame(loop);
+    console.log('First requestAnimationFrame returned:', intervalRef.current);
   };
 
   useEffect(() => {
@@ -321,7 +363,7 @@ const ARCaptureScreen: React.FC = () => {
           
           if (levelResult.leveledUp) {
             setTimeout(() => {
-              alert(`🎉 Level Up!\n\nYou reached Level ${levelResult.newLevel}!`);
+              Alert.alert('🎉 Level Up!', `You reached Level ${levelResult.newLevel}!`);
             }, 2000);
           }
           
