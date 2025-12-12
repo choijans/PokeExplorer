@@ -1,0 +1,40 @@
+{
+  "project_info": {
+    "project_number": "998672412190",
+    "firebase_url": "https://pokeexplorer-8b5dc-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "pokeexplorer-8b5dc",
+    "storage_bucket": "pokeexplorer-8b5dc.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:998672412190:android:d2314b33efdcefe464480f",
+        "android_client_info": {
+          "package_name": "com.pokeexplorer"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "998672412190-ka79g4qabmenl089jqcje4ameqcba7r2.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB4OKEiFC72n3QWb4R-cmJKxFfq4InlI0Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "998672412190-ka79g4qabmenl089jqcje4ameqcba7r2.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

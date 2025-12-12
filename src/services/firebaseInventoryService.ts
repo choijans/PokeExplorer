@@ -1,0 +1,156 @@
+import database from '@react-native-firebase/database';
+
+export interface InventoryItem {
+  id: string;
+  name: string;
+  type: 'pokeball' | 'greatball' | 'ultraball' | 'berry' | 'razz' | 'nanab' | 'pinap';
+  count: number;
+  icon: string;
+}
+
+class FirebaseInventoryService {
+  async getInventory(userId: string): Promise<InventoryItem[]> {
+    try {
+      const snapshot = await database().ref(`users/${userId}/inventory`).once('value');
+      const data = snapshot.val();
+      
+      if (data) {
+        return Object.entries(data).map(([id, item]: [string, any]) => {
+          const itemData = this.getItemData(id);
+          return { id, ...item, ...itemData };
+        });
+      }
+      
+      // Initialize default inventory
+      const starter: InventoryItem[] = [
+        { id: 'pokeball', name: 'Poké Ball', type: 'pokeball', count: 50, icon: '⚪' },
+        { id: 'greatball', name: 'Great Ball', type: 'greatball', count: 10, icon: '🔵' },
+        { id: 'ultraball', name: 'Ultra Ball', type: 'ultraball', count: 5, icon: '🟡' },
+        { id: 'razz', name: 'Razz Berry', type: 'razz', count: 10, icon: '🍓' },
+      ];
+      
+      await this.initializeInventory(userId, starter);
+      return starter;
+    } catch (error) {
+      console.error('Failed to load inventory:', error);
+      return [];
+    }
+  }
+
+  async initializeInventory(userId: string, items: InventoryItem[]): Promise<void> {
+    try {
+      const inventoryData: any = {};
+      items.forEach(item => {
+        inventoryData[item.id] = {
+          name: item.name,
+          type: item.type,
+          count: item.count,
+          icon: item.icon,
+        };
+      });
+      await database().ref(`users/${userId}/inventory`).set(inventoryData);
+    } catch (error) {
+      console.error('Failed to initialize inventory:', error);
+    }
+  }
+
+  async useItem(userId: string, itemId: string): Promise<boolean> {
+    try {
+      const itemRef = database().ref(`users/${userId}/inventory/${itemId}`);
+      const snapshot = await itemRef.once('value');
+      const item = snapshot.val();
+      
+      if (!item || item.count <= 0) return false;
+      
+      await itemRef.update({ count: item.count - 1 });
+      return true;
+    } catch (error) {
+      console.error('Failed to use item:', error);
+      return false;
+    }
+  }
+
+  async addItem(userId: string, itemId: string, amount: number = 1): Promise<void> {
+    try {
+      const itemRef = database().ref(`users/${userId}/inventory/${itemId}`);
+      const snapshot = await itemRef.once('value');
+      const item = snapshot.val();
+      
+      if (item) {
+        await itemRef.update({ count: item.count + amount });
+      } else {
+        const itemData = this.getItemData(itemId);
+        await itemRef.set({ ...itemData, count: amount });
+      }
+    } catch (error) {
+      console.error('Failed to add item:', error);
+    }
+  }
+
+  private getItemData(itemId: string): { name: string; type: string; icon: string; category: string; sprite?: string } {
+    const items: Record<string, any> = {
+      pokeball: { name: 'Poké Ball', type: 'ball', icon: '⚪', category: 'pokeball', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png' },
+      greatball: { name: 'Great Ball', type: 'ball', icon: '🔵', category: 'pokeball', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/great-ball.png' },
+      ultraball: { name: 'Ultra Ball', type: 'ball', icon: '🟡', category: 'pokeball', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/ultra-ball.png' },
+      masterball: { name: 'Master Ball', type: 'ball', icon: '🟣', category: 'pokeball', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/master-ball.png' },
+      razz: { name: 'Razz Berry', type: 'berry', icon: '🍓', category: 'berry', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/razz-berry.png' },
+      nanab: { name: 'Nanab Berry', type: 'berry', icon: '🍌', category: 'berry', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/nanab-berry.png' },
+      pinap: { name: 'Pinap Berry', type: 'berry', icon: '🍍', category: 'berry', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/pinap-berry.png' },
+      goldenrazz: { name: 'Golden Razz', type: 'berry', icon: '🍒', category: 'berry' },
+      silverpinap: { name: 'Silver Pinap', type: 'berry', icon: '�', category: 'berry' },
+      basiclure: { name: 'Basic Lure', type: 'lure', icon: '🎣', category: 'map-lure' },
+      superlure: { name: 'Super Lure', type: 'lure', icon: '🎣', category: 'map-lure' },
+      rarelure: { name: 'Rare Lure', type: 'lure', icon: '🌟', category: 'map-lure' },
+      luckyegg: { name: 'Lucky Egg', type: 'booster', icon: '🥚', category: 'xp-boost', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/lucky-egg.png' },
+      starpiece: { name: 'Star Piece', type: 'booster', icon: '⭐', category: 'xp-boost', sprite: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/star-piece.png' },
+      superegg: { name: 'Super Egg', type: 'booster', icon: '🥚', category: 'xp-boost' },
+    };
+    return items[itemId] || { name: itemId, type: itemId, icon: '❓', category: 'other' };
+  }
+
+  subscribeToInventory(userId: string, callback: (inventory: InventoryItem[]) => void): () => void {
+    const ref = database().ref(`users/${userId}/inventory`);
+    
+    const listener = ref.on('value', async (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        const inventory: InventoryItem[] = Object.entries(data).map(([id, item]: [string, any]) => {
+          const itemData = this.getItemData(id);
+          return { id, ...item, ...itemData };
+        });
+        callback(inventory);
+      } else {
+        // No inventory data - initialize with starter items
+        const starter: InventoryItem[] = [
+          { id: 'pokeball', name: 'Poké Ball', type: 'pokeball', count: 10, icon: '⚪' },
+          { id: 'greatball', name: 'Great Ball', type: 'greatball', count: 5, icon: '🔵' },
+          { id: 'razz', name: 'Razz Berry', type: 'razz', count: 5, icon: '🍓' },
+        ];
+        await this.initializeInventory(userId, starter);
+        // The listener will fire again after initialization with the new data
+      }
+    });
+
+    return () => ref.off('value', listener);
+  }
+
+  getCatchRateBonus(ballType: string): number {
+    const bonuses: { [key: string]: number } = {
+      pokeball: 1.0,
+      greatball: 1.5,
+      ultraball: 2.0,
+    };
+    return bonuses[ballType] || 1.0;
+  }
+
+  getBerryEffect(berryType: string): { catchBonus: number; fleeReduction: number } {
+    const effects: { [key: string]: any } = {
+      razz: { catchBonus: 0.5, fleeReduction: 0 },
+      nanab: { catchBonus: 0, fleeReduction: 0.5 },
+      pinap: { catchBonus: 0, fleeReduction: 0 },
+    };
+    return effects[berryType] || { catchBonus: 0, fleeReduction: 0 };
+  }
+}
+
+export const firebaseInventoryService = new FirebaseInventoryService();
