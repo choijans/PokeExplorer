@@ -65,7 +65,7 @@ class PokeAPI {
   async testConnection(): Promise<boolean> {
     try {
       console.log('Testing connection with fetch');
-      const response = await fetch('http://pokeapi.co/api/v2/pokemon', {
+      const response = await fetch(`${BASE_URL}/pokemon?limit=1`, {
         headers: {
           'Accept': 'application/json',
           'User-Agent': 'PokeExplorer/1.0',
