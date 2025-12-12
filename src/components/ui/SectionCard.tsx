@@ -24,31 +24,33 @@ const SectionCard: React.FC<SectionCardProps> = ({
 
   return (
     <Surface style={[styles.surface, { borderRadius: theme.custom.radius.lg }, style]} elevation={2}>
-      {(title || actions) && (
-        <View style={styles.header}>
-          <View style={styles.headerText}>
-            {title && (
-              <Text
-                variant="titleMedium"
-                style={{ color: theme.colors.onSurface, flexShrink: 1 }}
-              >
-                {title}
-              </Text>
-            )}
-            {subtitle && (
-              <Text
-                variant="bodySmall"
-                style={{ color: theme.colors.onSurfaceVariant, flexShrink: 1 }}
-              >
-                {subtitle}
-              </Text>
-            )}
+      <View style={styles.innerContainer}>
+        {(title || actions) && (
+          <View style={styles.header}>
+            <View style={styles.headerText}>
+              {title && (
+                <Text
+                  variant="titleMedium"
+                  style={{ color: theme.colors.onSurface, flexShrink: 1 }}
+                >
+                  {title}
+                </Text>
+              )}
+              {subtitle && (
+                <Text
+                  variant="bodySmall"
+                  style={{ color: theme.colors.onSurfaceVariant, flexShrink: 1 }}
+                >
+                  {subtitle}
+                </Text>
+              )}
+            </View>
+            {actions && <View style={styles.actions}>{actions}</View>}
           </View>
-          {actions && <View style={styles.actions}>{actions}</View>}
+        )}
+        <View style={[styles.content, { padding: theme.custom.spacing.md }, contentStyle]}>
+          {children}
         </View>
-      )}
-      <View style={[styles.content, { padding: theme.custom.spacing.md }, contentStyle]}>
-        {children}
       </View>
     </Surface>
   );
@@ -56,8 +58,11 @@ const SectionCard: React.FC<SectionCardProps> = ({
 
 const styles = StyleSheet.create({
   surface: {
-    overflow: 'hidden',
     marginBottom: 16,
+  },
+  innerContainer: {
+    overflow: 'hidden',
+    borderRadius: 12,
   },
   header: {
     paddingHorizontal: 20,

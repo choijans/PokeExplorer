@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
 import { Card, Chip, Text, useTheme } from 'react-native-paper';
+import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { Pokemon } from '../services/pokeApi';
 import { LazyImage } from './LazyImage';
 import type { PokemonTheme } from '../theme';
@@ -46,11 +47,15 @@ const PokemonCard: React.FC<PokemonCardProps> = ({ pokemon, onPress, isDiscovere
       style={[
         styles.card,
         { borderRadius: theme.custom.radius.lg, backgroundColor: theme.colors.surface },
-        isDiscovered && { borderColor: theme.colors.primary, borderWidth: 2 },
       ]}
     >
       <Card.Content style={styles.content}>
-        <View style={[styles.imageWrapper, { backgroundColor: theme.colors.primaryContainer }]}> 
+        <View style={[styles.imageWrapper, { backgroundColor: theme.colors.primaryContainer }]}>
+          {isDiscovered && (
+            <View style={styles.caughtBadge}>
+              <Icon name="check-circle" size={20} color="#4CAF50" />
+            </View>
+          )}
           <LazyImage
             source={{
               uri:
@@ -72,21 +77,6 @@ const PokemonCard: React.FC<PokemonCardProps> = ({ pokemon, onPress, isDiscovere
             >
               {pokemon.name.charAt(0).toUpperCase() + pokemon.name.slice(1)}
             </Text>
-            {isDiscovered && (
-              <Chip
-                icon="check"
-                textStyle={{
-                  color: theme.colors.onPrimary,
-                  fontWeight: '600',
-                }}
-                style={[
-                  chipStyles.base,
-                  { backgroundColor: theme.colors.tertiary },
-                ]}
-              >
-                Caught
-              </Chip>
-            )}
           </View>
           <Text variant="labelMedium" style={{ color: theme.colors.onSurfaceVariant }}>
             #{pokemon.id.toString().padStart(3, '0')}
@@ -129,6 +119,15 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
+    position: 'relative',
+  },
+  caughtBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    zIndex: 10,
   },
   image: {
     width: 72,

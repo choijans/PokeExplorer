@@ -54,6 +54,7 @@ const ARCaptureScreen: React.FC = () => {
   const [rarity, setRarity] = useState<'common'|'uncommon'|'rare'|'epic'|'legendary'>('common');
   const [minigameReady, setMinigameReady] = useState(false);
   const [catchQuality, setCatchQuality] = useState<'Nice'|'Great'|'Excellent'|null>(null);
+  const [showCaptureResult, setShowCaptureResult] = useState<'catching' | 'success' | 'escape' | null>(null);
   const isHoldingRef = useRef(false);
   const tensionSamplesRef = useRef<number[]>([]);
   const timeInZoneRef = useRef(0);
@@ -76,6 +77,11 @@ const ARCaptureScreen: React.FC = () => {
   const progressAnim = useRef(new Animated.Value(0)).current;
   const throwButtonGlow = useRef(new Animated.Value(0)).current;
   const dimAnim = useRef(new Animated.Value(0)).current;
+  const pokeballShakeAnim = useRef(new Animated.Value(0)).current;
+  const pokeballScaleAnim = useRef(new Animated.Value(1)).current;
+  const pokemonEscapeAnim = useRef(new Animated.Value(0)).current;
+  const sparkleAnim = useRef(new Animated.Value(0)).current;
+  const pokeballShakeLoopRef = useRef<Animated.CompositeAnimation | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -134,6 +140,11 @@ const ARCaptureScreen: React.FC = () => {
       silverpinap: 'easier + more candy',
     };
     setAnnounceText(`You used a ${berryName}!\nThe wild Pokémon is ${berryEffects[berryType] || 'affected'}.`);
+    
+    // Clear the announcement after 2.5 seconds
+    setTimeout(() => {
+      setAnnounceText('');
+    }, 2500);
   };
 
   const handleThrow = async () => {
@@ -209,12 +220,79 @@ const ARCaptureScreen: React.FC = () => {
     timeInZoneRef.current = 0;
     totalTimeRef.current = 0;
     
+    // Reset pokeball animation values
+    pokeballShakeAnim.setValue(0);
+    pokeballScaleAnim.setValue(1);
+    pokemonEscapeAnim.setValue(0);
+    sparkleAnim.setValue(0);
+    
+    // Start pokeball shake animation
+    setShowCaptureResult('catching');
+    startPokeballShake();
+    
     setTimeout(() => {
       console.log('Minigame ready, starting game loop');
       setMinigameReady(true);
       setAnnounceText('');
       startGameLoop();
     }, 1000);
+  };
+
+  const startPokeballShake = () => {
+    pokeballShakeAnim.setValue(0);
+    pokeballScaleAnim.setValue(1);
+    
+    // Create a continuous shake loop
+    const shakeLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pokeballShakeAnim, { toValue: 15, duration: 100, useNativeDriver: true }),
+        Animated.timing(pokeballShakeAnim, { toValue: -15, duration: 100, useNativeDriver: true }),
+        Animated.timing(pokeballShakeAnim, { toValue: 10, duration: 80, useNativeDriver: true }),
+        Animated.timing(pokeballShakeAnim, { toValue: -10, duration: 80, useNativeDriver: true }),
+        Animated.timing(pokeballShakeAnim, { toValue: 0, duration: 60, useNativeDriver: true }),
+        Animated.delay(300),
+      ])
+    );
+    
+    pokeballShakeLoopRef.current = shakeLoop;
+    shakeLoop.start();
+  };
+
+  const stopPokeballShake = () => {
+    if (pokeballShakeLoopRef.current) {
+      pokeballShakeLoopRef.current.stop();
+      pokeballShakeLoopRef.current = null;
+    }
+    pokeballShakeAnim.setValue(0);
+  };
+
+  const playSuccessAnimation = (callback: () => void) => {
+    stopPokeballShake();
+    setShowCaptureResult('success');
+    
+    // Sparkle and scale animation for success
+    Animated.parallel([
+      Animated.sequence([
+        Animated.timing(pokeballScaleAnim, { toValue: 1.2, duration: 200, useNativeDriver: true }),
+        Animated.timing(pokeballScaleAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+      ]),
+      Animated.timing(sparkleAnim, { toValue: 1, duration: 600, useNativeDriver: true }),
+    ]).start(() => {
+      setTimeout(callback, 500);
+    });
+  };
+
+  const playEscapeAnimation = (callback: () => void) => {
+    stopPokeballShake();
+    setShowCaptureResult('escape');
+    
+    // Pokemon bursts out animation
+    Animated.parallel([
+      Animated.timing(pokeballScaleAnim, { toValue: 1.5, duration: 300, useNativeDriver: true }),
+      Animated.timing(pokemonEscapeAnim, { toValue: 1, duration: 500, useNativeDriver: true }),
+    ]).start(() => {
+      setTimeout(callback, 800);
+    });
   };
 
   const startGameLoop = () => {
@@ -322,6 +400,11 @@ const ARCaptureScreen: React.FC = () => {
         cancelAnimationFrame(intervalRef.current);
         intervalRef.current = null;
       }
+      // Cleanup pokeball shake animation
+      if (pokeballShakeLoopRef.current) {
+        pokeballShakeLoopRef.current.stop();
+        pokeballShakeLoopRef.current = null;
+      }
     };
   }, []);
 
@@ -337,13 +420,10 @@ const ARCaptureScreen: React.FC = () => {
     else if (qualityScore >= 50) quality = 'Great';
     setCatchQuality(quality);
     
-    Animated.sequence([
-      Animated.timing(shakeAnim, { toValue: 20, duration: 200, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 0, duration: 200, useNativeDriver: true }),
-    ]).start();
-    Animated.timing(dimAnim, { toValue: 0, duration: 500, useNativeDriver: false }).start();
-    
-    setTimeout(async () => {
+    // Play success animation with pokeball click
+    playSuccessAnimation(async () => {
+      Animated.timing(dimAnim, { toValue: 0, duration: 500, useNativeDriver: false }).start();
+      
       const qualityBonus = quality === 'Excellent' ? 100 : quality === 'Great' ? 50 : 25;
       const baseXP = 100;
       const xp = baseXP + qualityBonus + (berryActive ? 10 : 0);
@@ -400,44 +480,43 @@ const ARCaptureScreen: React.FC = () => {
         await catchHistoryService.addEntry(historyEntry);
       }
       
+      setShowCaptureResult(null);
       setCaught(true);
       setTimeout(() => {
         navigation.goBack();
       }, 2500);
-    }, 500);
+    });
   };
 
   const handleCaptureFailure = async () => {
     setShowMinigame(false);
-    Animated.sequence([
-      Animated.timing(shakeAnim, { toValue: 30, duration: 100, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: -30, duration: 100, useNativeDriver: true }),
-      Animated.timing(shakeAnim, { toValue: 0, duration: 100, useNativeDriver: true }),
-    ]).start();
-    setAnnounceText('The Pokémon broke free and fled!');
-    Animated.timing(dimAnim, { toValue: 0, duration: 300, useNativeDriver: false }).start();
     
-    const historyEntry = {
-      pokemonId: pokemon.id,
-      pokemonName: pokemon.name,
-      timestamp: Date.now(),
-      result: 'fled' as const,
-      location: { latitude: 0, longitude: 0 },
-      biome,
-      rarity,
-      ballUsed: selectedBall,
-    };
-    
-    if (user) {
-      await firebaseCatchHistoryService.addEntry(user.uid, historyEntry);
-    } else {
-      await catchHistoryService.addEntry(historyEntry);
-    }
-    
-    setTimeout(() => {
+    // Play escape animation with pokemon bursting out
+    playEscapeAnimation(async () => {
+      setAnnounceText('The Pokémon broke free and fled!');
+      Animated.timing(dimAnim, { toValue: 0, duration: 300, useNativeDriver: false }).start();
+      
+      const historyEntry = {
+        pokemonId: pokemon.id,
+        pokemonName: pokemon.name,
+        timestamp: Date.now(),
+        result: 'fled' as const,
+        location: { latitude: 0, longitude: 0 },
+        biome,
+        rarity,
+        ballUsed: selectedBall,
+      };
+      
+      if (user) {
+        await firebaseCatchHistoryService.addEntry(user.uid, historyEntry);
+      } else {
+        await catchHistoryService.addEntry(historyEntry);
+      }
+      
+      setShowCaptureResult(null);
       setEscaped(true);
       setTimeout(() => navigation.goBack(), 1500);
-    }, 1000);
+    });
   };
 
   const getBallLabel = (ballId: string) => {
@@ -620,8 +699,6 @@ const ARCaptureScreen: React.FC = () => {
                     razz: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/razz-berry.png',
                     nanab: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/nanab-berry.png',
                     pinap: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/pinap-berry.png',
-                    goldenrazz: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/golden-razz-berry.png',
-                    silverpinap: 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/silver-pinap-berry.png',
                   };
                   return (
                     <TouchableOpacity key={item.id} style={[styles.berryCard, selectedBerry === item.id && styles.berryCardActive]} onPress={() => useBerry(item.id)} disabled={berryActive || item.count === 0}>
@@ -639,6 +716,66 @@ const ARCaptureScreen: React.FC = () => {
               </View>
             </View>
           )}
+        </View>
+      )}
+
+      {/* Pokeball Capture Animation Overlay */}
+      {showCaptureResult && (
+        <View style={styles.captureAnimationOverlay}>
+          <View style={styles.captureAnimationContent}>
+            {/* Pokeball */}
+            <Animated.View style={[
+              styles.pokeballAnimContainer,
+              {
+                transform: [
+                  { rotate: pokeballShakeAnim.interpolate({ inputRange: [-15, 0, 15], outputRange: ['-15deg', '0deg', '15deg'] }) },
+                  { scale: pokeballScaleAnim },
+                ],
+              },
+            ]}>
+              <Image
+                source={{ uri: getBallConfig(selectedBall).sprite || 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png' }}
+                style={styles.pokeballAnimImage}
+              />
+            </Animated.View>
+            
+            {/* Success sparkles */}
+            {showCaptureResult === 'success' && (
+              <Animated.View style={[styles.sparkleContainer, { opacity: sparkleAnim }]}>
+                <Text style={styles.sparkleText}>✨</Text>
+                <Text style={[styles.sparkleText, styles.sparkleTopLeft]}>⭐</Text>
+                <Text style={[styles.sparkleText, styles.sparkleTopRight]}>✨</Text>
+                <Text style={[styles.sparkleText, styles.sparkleBottomLeft]}>⭐</Text>
+                <Text style={[styles.sparkleText, styles.sparkleBottomRight]}>✨</Text>
+              </Animated.View>
+            )}
+            
+            {/* Escape animation - Pokemon bursting out */}
+            {showCaptureResult === 'escape' && (
+              <Animated.View style={[
+                styles.escapeAnimContainer,
+                {
+                  opacity: pokemonEscapeAnim,
+                  transform: [
+                    { scale: pokemonEscapeAnim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1.5] }) },
+                    { translateY: pokemonEscapeAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -100] }) },
+                  ],
+                },
+              ]}>
+                <Image
+                  source={{ uri: imageUrl }}
+                  style={styles.escapePokemonImage}
+                />
+              </Animated.View>
+            )}
+            
+            {/* Status text */}
+            <Text style={styles.captureStatusText}>
+              {showCaptureResult === 'catching' ? 'Catching...' : 
+               showCaptureResult === 'success' ? 'Gotcha!' : 
+               'It broke free!'}
+            </Text>
+          </View>
         </View>
       )}
 
@@ -731,6 +868,21 @@ const styles = StyleSheet.create({
   rewardText: { fontSize: 14, color: '#666', marginTop: 8, fontWeight: '600' },
   escapeText: { fontSize: 24, fontWeight: 'bold', color: '#000' },
   backButton: { position: 'absolute', top: 50, left: 20, zIndex: 10 },
+  
+  // Pokeball capture animation styles
+  captureAnimationOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', zIndex: 30, backgroundColor: 'rgba(0,0,0,0.7)' },
+  captureAnimationContent: { alignItems: 'center', justifyContent: 'center' },
+  pokeballAnimContainer: { width: 120, height: 120, justifyContent: 'center', alignItems: 'center' },
+  pokeballAnimImage: { width: 100, height: 100 },
+  sparkleContainer: { position: 'absolute', width: 200, height: 200, justifyContent: 'center', alignItems: 'center' },
+  sparkleText: { fontSize: 32, position: 'absolute' },
+  sparkleTopLeft: { top: 0, left: 20 },
+  sparkleTopRight: { top: 0, right: 20 },
+  sparkleBottomLeft: { bottom: 20, left: 0 },
+  sparkleBottomRight: { bottom: 20, right: 0 },
+  escapeAnimContainer: { position: 'absolute', width: 150, height: 150, justifyContent: 'center', alignItems: 'center' },
+  escapePokemonImage: { width: 120, height: 120 },
+  captureStatusText: { fontSize: 24, fontWeight: 'bold', color: '#FFF', marginTop: 20, textShadowColor: '#000', textShadowOffset: { width: 2, height: 2 }, textShadowRadius: 4 },
 });
 
 export default ARCaptureScreen;
