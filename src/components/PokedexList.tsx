@@ -231,9 +231,35 @@ const PokedexList: React.FC = () => {
         });
         return granted === PermissionsAndroid.RESULTS.GRANTED;
       } else {
+        // iOS - request both permissions
+        console.log('Requesting iOS speech recognition permission...');
         const speechResult = await request(PERMISSIONS.IOS.SPEECH_RECOGNITION);
+        console.log('Speech recognition result:', speechResult);
+        
+        console.log('Requesting iOS microphone permission...');
         const micResult = await request(PERMISSIONS.IOS.MICROPHONE);
-        return speechResult === RESULTS.GRANTED && micResult === RESULTS.GRANTED;
+        console.log('Microphone result:', micResult);
+        
+        // Check if both permissions are granted or limited (limited still allows use)
+        const speechGranted = speechResult === RESULTS.GRANTED || speechResult === RESULTS.LIMITED;
+        const micGranted = micResult === RESULTS.GRANTED || micResult === RESULTS.LIMITED;
+        
+        if (!speechGranted) {
+          Alert.alert(
+            'Speech Recognition Required',
+            'Please enable Speech Recognition in Settings > PokeExplorer to use voice search.',
+            [{ text: 'OK' }]
+          );
+        }
+        if (!micGranted) {
+          Alert.alert(
+            'Microphone Required', 
+            'Please enable Microphone in Settings > PokeExplorer to use voice search.',
+            [{ text: 'OK' }]
+          );
+        }
+        
+        return speechGranted && micGranted;
       }
     } catch (err) {
       console.error('Permission request error:', err);

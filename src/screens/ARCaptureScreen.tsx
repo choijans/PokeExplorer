@@ -338,13 +338,13 @@ const ARCaptureScreen: React.FC = () => {
       pokemonPosRef.current += pokemonVelocityRef.current;
       pokemonPosRef.current = Math.max(10, Math.min(90, pokemonPosRef.current));
       
-      // Zone movement with faster acceleration
+      // Zone movement with slower acceleration for easier gameplay
       if (isHoldingRef.current) {
-        captureZoneVelocityRef.current += 0.15;
-        captureZoneVelocityRef.current = Math.min(2.0, captureZoneVelocityRef.current);
+        captureZoneVelocityRef.current += 0.08;
+        captureZoneVelocityRef.current = Math.min(1.2, captureZoneVelocityRef.current);
       } else {
-        captureZoneVelocityRef.current -= 0.15;
-        captureZoneVelocityRef.current = Math.max(-2.0, captureZoneVelocityRef.current);
+        captureZoneVelocityRef.current -= 0.08;
+        captureZoneVelocityRef.current = Math.max(-1.2, captureZoneVelocityRef.current);
       }
       
       captureZonePosRef.current += captureZoneVelocityRef.current;
@@ -554,17 +554,17 @@ const ARCaptureScreen: React.FC = () => {
   };
 
   const getRarityDrainSpeed = (rarity: 'common'|'uncommon'|'rare'|'epic'|'legendary') => {
-    const drainSpeeds = { common: 0.28, uncommon: 0.24, rare: 0.20, epic: 0.16, legendary: 0.13 };
+    const drainSpeeds = { common: 0.18, uncommon: 0.16, rare: 0.14, epic: 0.12, legendary: 0.10 };
     return drainSpeeds[rarity];
   };
 
   const getRarityMovement = (rarity: 'common'|'uncommon'|'rare'|'epic'|'legendary') => {
     const movements = {
-      common: { changeInterval: 1500 + Math.random() * 1000, acceleration: 0.012, friction: 0.90 },
-      uncommon: { changeInterval: 1200 + Math.random() * 800, acceleration: 0.015, friction: 0.88 },
-      rare: { changeInterval: 1000 + Math.random() * 600, acceleration: 0.018, friction: 0.86 },
-      epic: { changeInterval: 800 + Math.random() * 400, acceleration: 0.022, friction: 0.84 },
-      legendary: { changeInterval: 600 + Math.random() * 300, acceleration: 0.028, friction: 0.82 },
+      common: { changeInterval: 2000 + Math.random() * 1500, acceleration: 0.006, friction: 0.92 },
+      uncommon: { changeInterval: 1800 + Math.random() * 1200, acceleration: 0.008, friction: 0.91 },
+      rare: { changeInterval: 1500 + Math.random() * 1000, acceleration: 0.010, friction: 0.90 },
+      epic: { changeInterval: 1200 + Math.random() * 800, acceleration: 0.012, friction: 0.88 },
+      legendary: { changeInterval: 1000 + Math.random() * 600, acceleration: 0.015, friction: 0.86 },
     };
     return movements[rarity];
   };
@@ -584,10 +584,13 @@ const ARCaptureScreen: React.FC = () => {
     <View style={styles.container}>
       <Camera style={StyleSheet.absoluteFill} device={device} isActive={true} />
 
-      <Animated.View style={[styles.pokemonContainer, { transform: [{ translateY: bounceAnim }, { translateX: shakeAnim }, { scale: breatheAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] }) }] }]}>
-        <Image source={biomeConfig.platform} style={styles.biomePlatform} resizeMode="cover" />
-        <Image source={{ uri: imageUrl }} style={styles.pokemonImage} resizeMode="contain" />
-      </Animated.View>
+      {/* Hide pokemon when it's being captured in the pokeball */}
+      {!showCaptureResult && (
+        <Animated.View style={[styles.pokemonContainer, { transform: [{ translateY: bounceAnim }, { translateX: shakeAnim }, { scale: breatheAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] }) }] }]}>
+          <Image source={biomeConfig.platform} style={styles.biomePlatform} resizeMode="cover" />
+          <Image source={{ uri: imageUrl }} style={styles.pokemonImage} resizeMode="contain" />
+        </Animated.View>
+      )}
 
       <View style={styles.infoPanel}>
         <Text style={styles.pokemonName}>{pokemon.name.toUpperCase()}</Text>
@@ -719,63 +722,54 @@ const ARCaptureScreen: React.FC = () => {
         </View>
       )}
 
-      {/* Pokeball Capture Animation Overlay */}
+      {/* Pokeball Capture Animation - positioned near the pokemon, not blocking gameplay */}
       {showCaptureResult && (
-        <View style={styles.captureAnimationOverlay}>
-          <View style={styles.captureAnimationContent}>
-            {/* Pokeball */}
+        <View style={styles.captureAnimationContainer} pointerEvents="none">
+          {/* Pokeball */}
+          <Animated.View style={[
+            styles.pokeballAnimContainer,
+            {
+              transform: [
+                { rotate: pokeballShakeAnim.interpolate({ inputRange: [-15, 0, 15], outputRange: ['-15deg', '0deg', '15deg'] }) },
+                { scale: pokeballScaleAnim },
+              ],
+            },
+          ]}>
+            <Image
+              source={{ uri: getBallConfig(selectedBall).sprite || 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png' }}
+              style={styles.pokeballAnimImage}
+            />
+          </Animated.View>
+          
+          {/* Success sparkles */}
+          {showCaptureResult === 'success' && (
+            <Animated.View style={[styles.sparkleContainer, { opacity: sparkleAnim }]}>
+              <Text style={styles.sparkleText}>✨</Text>
+              <Text style={[styles.sparkleText, styles.sparkleTopLeft]}>⭐</Text>
+              <Text style={[styles.sparkleText, styles.sparkleTopRight]}>✨</Text>
+              <Text style={[styles.sparkleText, styles.sparkleBottomLeft]}>⭐</Text>
+              <Text style={[styles.sparkleText, styles.sparkleBottomRight]}>✨</Text>
+            </Animated.View>
+          )}
+          
+          {/* Escape animation - Pokemon bursting out */}
+          {showCaptureResult === 'escape' && (
             <Animated.View style={[
-              styles.pokeballAnimContainer,
+              styles.escapeAnimContainer,
               {
+                opacity: pokemonEscapeAnim,
                 transform: [
-                  { rotate: pokeballShakeAnim.interpolate({ inputRange: [-15, 0, 15], outputRange: ['-15deg', '0deg', '15deg'] }) },
-                  { scale: pokeballScaleAnim },
+                  { scale: pokemonEscapeAnim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1.5] }) },
+                  { translateY: pokemonEscapeAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -100] }) },
                 ],
               },
             ]}>
               <Image
-                source={{ uri: getBallConfig(selectedBall).sprite || 'https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/items/poke-ball.png' }}
-                style={styles.pokeballAnimImage}
+                source={{ uri: imageUrl }}
+                style={styles.escapePokemonImage}
               />
             </Animated.View>
-            
-            {/* Success sparkles */}
-            {showCaptureResult === 'success' && (
-              <Animated.View style={[styles.sparkleContainer, { opacity: sparkleAnim }]}>
-                <Text style={styles.sparkleText}>✨</Text>
-                <Text style={[styles.sparkleText, styles.sparkleTopLeft]}>⭐</Text>
-                <Text style={[styles.sparkleText, styles.sparkleTopRight]}>✨</Text>
-                <Text style={[styles.sparkleText, styles.sparkleBottomLeft]}>⭐</Text>
-                <Text style={[styles.sparkleText, styles.sparkleBottomRight]}>✨</Text>
-              </Animated.View>
-            )}
-            
-            {/* Escape animation - Pokemon bursting out */}
-            {showCaptureResult === 'escape' && (
-              <Animated.View style={[
-                styles.escapeAnimContainer,
-                {
-                  opacity: pokemonEscapeAnim,
-                  transform: [
-                    { scale: pokemonEscapeAnim.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1.5] }) },
-                    { translateY: pokemonEscapeAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -100] }) },
-                  ],
-                },
-              ]}>
-                <Image
-                  source={{ uri: imageUrl }}
-                  style={styles.escapePokemonImage}
-                />
-              </Animated.View>
-            )}
-            
-            {/* Status text */}
-            <Text style={styles.captureStatusText}>
-              {showCaptureResult === 'catching' ? 'Catching...' : 
-               showCaptureResult === 'success' ? 'Gotcha!' : 
-               'It broke free!'}
-            </Text>
-          </View>
+          )}
         </View>
       )}
 
@@ -869,20 +863,18 @@ const styles = StyleSheet.create({
   escapeText: { fontSize: 24, fontWeight: 'bold', color: '#000' },
   backButton: { position: 'absolute', top: 50, left: 20, zIndex: 10 },
   
-  // Pokeball capture animation styles
-  captureAnimationOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', zIndex: 30, backgroundColor: 'rgba(0,0,0,0.7)' },
-  captureAnimationContent: { alignItems: 'center', justifyContent: 'center' },
-  pokeballAnimContainer: { width: 120, height: 120, justifyContent: 'center', alignItems: 'center' },
-  pokeballAnimImage: { width: 100, height: 100 },
-  sparkleContainer: { position: 'absolute', width: 200, height: 200, justifyContent: 'center', alignItems: 'center' },
-  sparkleText: { fontSize: 32, position: 'absolute' },
-  sparkleTopLeft: { top: 0, left: 20 },
-  sparkleTopRight: { top: 0, right: 20 },
-  sparkleBottomLeft: { bottom: 20, left: 0 },
-  sparkleBottomRight: { bottom: 20, right: 0 },
-  escapeAnimContainer: { position: 'absolute', width: 150, height: 150, justifyContent: 'center', alignItems: 'center' },
-  escapePokemonImage: { width: 120, height: 120 },
-  captureStatusText: { fontSize: 24, fontWeight: 'bold', color: '#FFF', marginTop: 20, textShadowColor: '#000', textShadowOffset: { width: 2, height: 2 }, textShadowRadius: 4 },
+  // Pokeball capture animation styles - positioned near the pokemon, not blocking
+  captureAnimationContainer: { position: 'absolute', top: height * 0.2 + (width * 0.3), alignSelf: 'center', alignItems: 'center', justifyContent: 'center', zIndex: 6 },
+  pokeballAnimContainer: { width: 80, height: 80, justifyContent: 'center', alignItems: 'center' },
+  pokeballAnimImage: { width: 60, height: 60 },
+  sparkleContainer: { position: 'absolute', width: 150, height: 150, justifyContent: 'center', alignItems: 'center' },
+  sparkleText: { fontSize: 24, position: 'absolute' },
+  sparkleTopLeft: { top: 10, left: 20 },
+  sparkleTopRight: { top: 10, right: 20 },
+  sparkleBottomLeft: { bottom: 20, left: 10 },
+  sparkleBottomRight: { bottom: 20, right: 10 },
+  escapeAnimContainer: { position: 'absolute', width: 120, height: 120, justifyContent: 'center', alignItems: 'center' },
+  escapePokemonImage: { width: 100, height: 100 },
 });
 
 export default ARCaptureScreen;
