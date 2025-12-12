@@ -1,6 +1,6 @@
 ## PokeExplorer
 
-Tasklist - We can see our agile tasklist here in this excel file
+**Tasklist** - We can see our agile tasklist here in this excel file:  
 https://docs.google.com/spreadsheets/d/1Y9Zb_5j-wa5wDPFKQ87AU3PoXpO0bJIyC440ac4fwYc/edit?usp=sharing
 
 PokeExplorer is a React Native mobile app that lets you hunt, discover, and collect Pokémon in the real world. It combines geolocation, an AR-inspired capture minigame, a Pokédex, and a community feed for sharing discoveries.
